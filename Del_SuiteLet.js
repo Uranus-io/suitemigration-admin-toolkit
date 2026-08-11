@@ -3,7 +3,7 @@
  * @NScriptType Suitelet
  * @version v1.0
  *
- * Name: SuiteMigration Mass Purge
+ * Name: SuiteMigration Admin Toolkit
  * Description: Automated bulk cleanup and data reset utility for NetSuite Admins & Consultants.
  * Publisher: SuiteMigration (https://suitemigration.com)
  * License: SuiteMigration Free Utility License (See LICENSE file or https://suitemigration.com/license)
@@ -32,7 +32,14 @@ define([
 	"N/search",
 	"N/url",
 	"N/runtime",
-], function (serverWidget, task, log, search, url, runtime) {
+	"N/format",
+	"N/cache",
+], function (serverWidget, task, log, search, url, runtime, format, cache) {
+	// Cache used to read back the final deleted/failed counts written by the
+	// Map/Reduce script, so we can display them when the job completes.
+	var RESULT_CACHE_NAME = "smAdminToolkit";
+	var RESULT_CACHE_KEY = "lastDeleteResult";
+
 	// Deletion order: payments/credits first, then invoices/bills, then JEs, then entities
 	var GROUP_TYPES = {
 		all_transactions: [
@@ -52,6 +59,7 @@ define([
 			"creditcardcharge",
 			"transfer",
 			"journalentry",
+			"journalentry_sm",
 		],
 		all_entities: ["job", "customer", "vendor", "employee", "item"],
 		all_records: [
@@ -71,6 +79,7 @@ define([
 			"creditcardcharge",
 			"transfer",
 			"journalentry",
+			"journalentry_sm",
 			"job",
 			"customer",
 			"vendor",
@@ -85,7 +94,7 @@ define([
 		employee: "Employees",
 		item: "Items",
 		journalentry: "Journal Entries",
-		journalentry_sm: "Date Range Push Journal Entries",
+		journalentry_sm: "Journal Entries matching SuiteMigration Trial Balance push",
 		deposit: "Deposits",
 		invoice: "Invoices",
 		cashsale: "Cash Sales",
@@ -120,7 +129,29 @@ define([
 	}
 
 	function renderForm(context) {
-		var form = serverWidget.createForm({ title: "Delete Records" });
+		var form = serverWidget.createForm({
+			title: "SuiteMigration Admin Toolkit",
+		});
+
+		// Build the date-field placeholder as a format pattern (e.g. DD/MM/YYYY
+		// or MM/DD/YYYY) that matches the account's date preference. We format a
+		// known date (31 Dec 2025) so the day/month/year are unambiguous, then
+		// swap the numbers for DD/MM/YYYY tokens while keeping the account's own
+		// separators and field order.
+		var datePlaceholder = "";
+		try {
+			var sampleDate = format.format({
+				value: new Date(2025, 11, 31),
+				type: format.Type.DATE,
+			});
+			datePlaceholder = sampleDate
+				.replace("2025", "YYYY")
+				.replace("31", "DD")
+				.replace("12", "MM")
+				.replace("25", "YY");
+		} catch (e) {
+			datePlaceholder = "";
+		}
 
 		// --- Info text, CSS, and JS ---
 		var filterField = form.addField({
@@ -150,14 +181,37 @@ define([
 			".custpage-date-layout .custpage-date-label { display: block !important; }" +
 			".custpage-date-label { margin: 0 0 4px 0 !important; padding: 0 !important; width: auto !important; text-align: left; text-transform: uppercase; color: var(--custpage-label-color, inherit); font-size: calc(var(--custpage-label-size, 12px) - 2px); font-weight: normal; letter-spacing: var(--custpage-label-spacing, inherit); }" +
 			".custpage-confirm-value { color: #7a3b00; background: #ffe6cc; padding: 0 4px; border-radius: 3px; font-weight: 700; border: 1px solid #ffcc99; }" +
+			".sm-modal-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.45); z-index:100000; }" +
+			".sm-modal-overlay.sm-show { display:flex; align-items:center; justify-content:center; }" +
+			".sm-modal { background:#fff; border-radius:8px; max-width:560px; width:90%; box-shadow:0 8px 30px rgba(0,0,0,0.25); overflow:hidden; }" +
+			".sm-modal-header { background:#fff8e1; color:#8a6d00; font-weight:700; font-size:16px; padding:16px 20px; border-bottom:1px solid #ffe0a3; }" +
+			".sm-modal-body { padding:18px 20px; color:#333; font-size:14px; line-height:1.5; }" +
+			".sm-modal-note { padding:0 20px 4px; color:#a01212; font-size:12px; font-weight:600; }" +
+			".sm-modal-footer { padding:14px 20px; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #eee; }" +
+			".sm-btn { padding:9px 18px; border-radius:4px; font-size:14px; font-weight:600; cursor:pointer; border:1px solid transparent; }" +
+			".sm-btn-cancel { background:#f0f0f0; color:#333; border:1px solid #ccc; }" +
+			".sm-btn-cancel:hover { background:#e5e5e5; }" +
+			".sm-btn-delete { background:#e53935; color:#fff; }" +
+			".sm-btn-delete:hover { background:#d32f2f; }" +
 			"</style>" +
-			"<b>Info:</b> Select a subsidiary, push mode, and record type, then choose how to filter by date.<br>" +
-			"<ul style='margin:5px 0;'>" +
-			"<li><b>Push Mode</b> &mdash; <b>Pushed from SuiteMigration</b> (default) targets records with an external ID; <b>Manually Created in NetSuite</b> targets records without an external ID; <b>Both</b> targets all records regardless of external ID.</li>" +
-			"<li><b>Record Type</b> &mdash; choose an individual type or a group option: <b>All Records</b>, <b>All Cust/Vend/Emp/Item Records</b>, or <b>All Transactions</b>.</li>" +
-			"<li><b>Delete by Date</b> options &mdash; <b>All Records</b> deletes every record with no date filtering;<br><b>Transaction Date Range</b> filters by transaction date (available for transactions only); <b>Creation Date Range</b> filters by creation date (available for all record types).</li>" +
-			"<li>The <b>From</b> date is optional &mdash; leave it blank to delete all records up to and including the <b>To</b> date.</li>" +
-			"<li>All dates are <b>inclusive</b> &mdash; both the From and To dates are included in the deletion range.</li>" +
+			"<b>Getting started:</b> Select a Subsidiary, External ID option, and Record Type, then choose a Date Filter. A confirmation summary appears for you to review before anything is deleted.<br>" +
+			"<ul style='margin:8px 0;padding-left:20px;line-height:1.5;'>" +
+			"<li><b>External ID</b> &mdash; which records to target, based on their External ID:" +
+			"<ul style='margin:4px 0;'>" +
+			"<li>All records (Blank + All populated values) &mdash; every record, whether it has an External ID or not.</li>" +
+			"<li>All populated values &mdash; records that have an External ID (any value).</li>" +
+			"<li>Blank &mdash; records with no External ID.</li>" +
+			"<li>All populated values that match SuiteMigration &mdash; records whose External ID matches the SuiteMigration format.</li>" +
+			"</ul></li>" +
+			"<li><b>Record Type</b> &mdash; a single record type, or a group option: All Records, All Entities (Customers, Vendors, Employees, Items, Projects), or All Transactions.</li>" +
+			"<li><b>Date Filter</b> &mdash; how records are matched by date:" +
+			"<ul style='margin:4px 0;'>" +
+			"<li>Created Date &mdash; filters by the date each record was created (all record types).</li>" +
+			"<li>Transaction Date &mdash; filters by transaction date (transactions only).</li>" +
+			"<li>No Date Filter &mdash; deletes every matching record.</li>" +
+			"</ul></li>" +
+			"<li>The From date is optional &mdash; leave it blank to delete everything up to and including the To date.</li>" +
+			"<li>All dates are inclusive &mdash; both the From and To dates fall within the deletion range.</li>" +
 			"</ul>" +
 			"<script>" +
 			"(function() {" +
@@ -228,7 +282,7 @@ define([
 			"  function applyPlaceholders() {" +
 			"    fieldIds.forEach(function(id) {" +
 			"      var el = document.getElementById(id);" +
-			"      if (el) el.placeholder = 'DD/MM/YYYY';" +
+			"      if (el) el.placeholder = " + JSON.stringify(datePlaceholder) + ";" +
 			"    });" +
 			"  }" +
 			"  function tryMoveAll() {" +
@@ -288,6 +342,7 @@ define([
 			"        msg = 'This will delete <span class=\"custpage-confirm-value\">' + label + '</span> in <span class=\"custpage-confirm-value\">' + sub + '</span> subsidiary with creation dates before and including <span class=\"custpage-confirm-value\">' + t + '</span>. All records with creation dates after <span class=\"custpage-confirm-value\">' + t + '</span> will not be deleted.';" +
 			"      }" +
 			"    }" +
+			"    window.__smMsg = msg;" +
 			"    div.innerHTML = msg ? '<div style=\"padding:10px;background:#fff3e0;border:1px solid #ff9800;border-radius:4px;margin-top:10px;color:#e65100;font-weight:bold;width:580px;\">' + msg + '</div>' : '';" +
 			"  }" +
 			"  function toggleDateFields() {" +
@@ -317,9 +372,9 @@ define([
 			"    } else if (!isEntity && !hasTrandateOpt && recType) {" +
 			"      try {" +
 			"        nlapiRemoveSelectOption('custpage_deletemode', null);" +
-			"        nlapiInsertSelectOption('custpage_deletemode', 'all', 'All Records');" +
-			"        nlapiInsertSelectOption('custpage_deletemode', 'trandate', 'Transaction Date Range');" +
-			"        nlapiInsertSelectOption('custpage_deletemode', 'createddate', 'Creation Date Range');" +
+			"        nlapiInsertSelectOption('custpage_deletemode', 'createddate', 'Created Date');" +
+			"        nlapiInsertSelectOption('custpage_deletemode', 'trandate', 'Transaction Date');" +
+			"        nlapiInsertSelectOption('custpage_deletemode', 'all', 'No Date Filter');" +
 			"        hasTrandateOpt = true;" +
 			"        nlapiSetFieldValue('custpage_deletemode', mode);" +
 			"      } catch(e) {}" +
@@ -341,10 +396,85 @@ define([
 			"    }" +
 			"    updateConfirmation();" +
 			"  }" +
+			"  function updateSubmitButton() {" +
+			"    var sub='', rec='', pm='', mode='all', tt='', ct='';" +
+			"    try { sub = nlapiGetFieldValue('custpage_subsidiary') || ''; } catch(e) {}" +
+			"    try { rec = nlapiGetFieldValue('custpage_delete_action') || ''; } catch(e) {}" +
+			"    try { pm = nlapiGetFieldValue('custpage_pushmode') || ''; } catch(e) {}" +
+			"    try { mode = nlapiGetFieldValue('custpage_deletemode') || 'all'; } catch(e) {}" +
+			"    try { tt = nlapiGetFieldValue('custpage_trandateto') || ''; } catch(e) {}" +
+			"    try { ct = nlapiGetFieldValue('custpage_createddateto') || ''; } catch(e) {}" +
+			"    var ok = !!sub && !!rec && !!pm;" +
+			"    if (ok && mode === 'trandate') ok = !!tt;" +
+			"    if (ok && mode === 'createddate') ok = !!ct;" +
+			"    var btns = [];" +
+			"    var ids = ['submitter','secondarysubmitter'];" +
+			"    for (var k = 0; k < ids.length; k++) { var e = document.getElementById(ids[k]); if (e) btns.push(e); }" +
+			"    var nodes = document.querySelectorAll('input[type=\"submit\"], button, input.rndbuttoninpt, a.rndbuttoninpt');" +
+			"    for (var n = 0; n < nodes.length; n++) {" +
+			"      var node = nodes[n];" +
+			"      var lbl = (node.value || node.textContent || '').replace(/\\s+/g, ' ').trim();" +
+			"      if (lbl === 'Preview Deletion' && btns.indexOf(node) === -1) btns.push(node);" +
+			"    }" +
+			"    var tip = ok ? '' : 'Select a subsidiary, External ID option, and record type (and a To date when a date range is chosen) to continue.';" +
+			"    function styleEl(el, off) {" +
+			"      if (!el) return;" +
+			"      var props = { 'background-color':'#8b929b','background-image':'none','color':'#f4f5f6','border-color':'#8b929b','border-top-color':'#8b929b','border-bottom-color':'#8b929b','border-left-color':'#8b929b','border-right-color':'#8b929b','box-shadow':'none','text-shadow':'none','outline':'none','opacity':'1' };" +
+			"      for (var p in props) {" +
+			"        if (off) { el.style.setProperty(p, props[p], 'important'); } else { el.style.removeProperty(p); }" +
+			"      }" +
+			"      el.style.filter = '';" +
+			"      el.style.cursor = off ? 'not-allowed' : '';" +
+			"      el.style.pointerEvents = off ? 'none' : '';" +
+			"    }" +
+			"    for (var i = 0; i < btns.length; i++) {" +
+			"      var b = btns[i];" +
+			"      try { b.disabled = !ok; } catch(e) {}" +
+			"      b.title = tip;" +
+			"      styleEl(b, !ok);" +
+			"      styleEl(b.parentElement, !ok);" +
+			"    }" +
+			"    smSetup();" +
+			"  }" +
+			"  function smGetMsg() {" +
+			"    if (window.__smMsg && window.__smMsg.replace(/\\s/g,'') !== '') return window.__smMsg;" +
+			"    return 'You are about to permanently delete the selected records. Do you want to proceed?';" +
+			"  }" +
+			"  function smShowModal() {" +
+			"    var body = document.getElementById('smModalBody');" +
+			"    var overlay = document.getElementById('smModalOverlay');" +
+			"    if (!body || !overlay) return;" +
+			"    body.innerHTML = smGetMsg();" +
+			"    overlay.className = 'sm-modal-overlay sm-show';" +
+			"  }" +
+			"  function smHideModal() {" +
+			"    var overlay = document.getElementById('smModalOverlay');" +
+			"    if (overlay) overlay.className = 'sm-modal-overlay';" +
+			"  }" +
+			"  function smSetup() {" +
+			"    var c = document.getElementById('smCancelBtn');" +
+			"    var d = document.getElementById('smConfirmBtn');" +
+			"    if (c && !c.getAttribute('data-wired')) { c.setAttribute('data-wired','1'); c.addEventListener('click', function(){ smHideModal(); }); }" +
+			"    if (d && !d.getAttribute('data-wired')) { d.setAttribute('data-wired','1'); d.addEventListener('click', function(){ window.__smConfirmed = true; smHideModal(); if (window.__smPendingBtn) { window.__smPendingBtn.click(); } }); }" +
+			"  }" +
 			"  function init() {" +
 			"    captureRefStyles();" +
 			"    applyPlaceholders();" +
+			"    updateSubmitButton();" +
 			"    setInterval(toggleDateFields, 300);" +
+			"    setInterval(updateSubmitButton, 300);" +
+			"    document.addEventListener('click', function(e) {" +
+			"      var t = e.target;" +
+			"      var btn = (t && t.closest) ? t.closest('input[type=\"submit\"], button, .rndbuttoninpt, a.rndbuttoninpt') : null;" +
+			"      if (!btn) return;" +
+			"      var lbl = (btn.value || btn.textContent || '').replace(/\\s+/g,' ').trim();" +
+			"      var isDel = (btn.id === 'submitter' || btn.id === 'secondarysubmitter' || lbl === 'Preview Deletion');" +
+			"      if (!isDel) return;" +
+			"      if (window.__smConfirmed) return;" +
+			"      e.preventDefault(); e.stopImmediatePropagation();" +
+			"      window.__smPendingBtn = btn;" +
+			"      smShowModal();" +
+			"    }, true);" +
 			"    var attempts = 0;" +
 			"    var timer = setInterval(function() {" +
 			"      attempts++;" +
@@ -386,28 +516,35 @@ define([
 			});
 		});
 
-		// --- Push Mode (below Subsidiary) ---
+		// --- External ID (below Subsidiary) ---
 		form.addFieldGroup({ id: "custpage_grp_pushmode", label: " " });
 		var pushModeField = form.addField({
 			id: "custpage_pushmode",
 			type: serverWidget.FieldType.SELECT,
-			label: "Push Mode",
+			label: "External ID",
 			container: "custpage_grp_pushmode",
 		});
 		pushModeField.isMandatory = true;
 		pushModeField.addSelectOption({
-			value: "sm_pushed",
-			text: "Pushed from SuiteMigration",
+			value: "",
+			text: "-- Select External ID Criteria --",
 		});
 		pushModeField.addSelectOption({
-			value: "manually_created",
-			text: "Manually Created in NetSuite",
+			value: "all",
+			text: "All records (Blank + All populated values)",
 		});
 		pushModeField.addSelectOption({
-			value: "both",
-			text: "Both SM Pushed and Manually Created",
+			value: "populated",
+			text: "All populated values",
 		});
-		pushModeField.defaultValue = "sm_pushed";
+		pushModeField.addSelectOption({
+			value: "blank",
+			text: "Blank",
+		});
+		pushModeField.addSelectOption({
+			value: "sm_match",
+			text: "All populated values that match SuiteMigration",
+		});
 
 		// --- Row 2: Record Type ---
 		form.addFieldGroup({ id: "custpage_grp2", label: " " });
@@ -429,11 +566,11 @@ define([
 		});
 		deleteActionField.addSelectOption({
 			value: "all_entities",
-			text: "All Cust/Vend/Emp/Item Records",
+			text: "All Entities (Customers, Vendors, Employees, Items, Projects)",
 		});
 		deleteActionField.addSelectOption({
 			value: "all_transactions",
-			text: "All Transactions (incl. JEs)",
+			text: "All Transactions (including Journal Entries)",
 		});
 		// --- Individual Options ---
 		deleteActionField.addSelectOption({
@@ -453,7 +590,7 @@ define([
 		});
 		deleteActionField.addSelectOption({
 			value: "journalentry_sm",
-			text: "Date Range Push Journal Entries",
+			text: "Journal Entries matching SuiteMigration Trial Balance push",
 		});
 		deleteActionField.addSelectOption({
 			value: "invoice",
@@ -516,26 +653,26 @@ define([
 			text: "Transfers",
 		});
 
-		// --- Row 3: Delete by Date ---
+		// --- Row 3: Date Filter ---
 		form.addFieldGroup({ id: "custpage_grp3", label: " " });
 		var deleteModeField = form.addField({
 			id: "custpage_deletemode",
 			type: serverWidget.FieldType.SELECT,
-			label: "Delete by Date",
+			label: "Date Filter",
 			container: "custpage_grp3",
 		});
 		deleteModeField.isMandatory = true;
 		deleteModeField.addSelectOption({
-			value: "all",
-			text: "All Records",
+			value: "createddate",
+			text: "Created Date",
 		});
 		deleteModeField.addSelectOption({
 			value: "trandate",
-			text: "Transaction Date Range",
+			text: "Transaction Date",
 		});
 		deleteModeField.addSelectOption({
-			value: "createddate",
-			text: "Creation Date Range",
+			value: "all",
+			text: "No Date Filter",
 		});
 		deleteModeField.defaultValue = "createddate";
 
@@ -596,9 +733,18 @@ define([
 			container: "custpage_grp_confirm",
 		});
 		confirmField.defaultValue =
-			'<div id="custpage_confirmation_text"></div>';
+			'<div id="custpage_confirmation_text" style="display:none;"></div>' +
+			'<div id="smModalOverlay" class="sm-modal-overlay">' +
+			'<div class="sm-modal">' +
+			'<div class="sm-modal-header">&#9888; Confirm Deletion</div>' +
+			'<div class="sm-modal-body" id="smModalBody"></div>' +
+			'<div class="sm-modal-note">This action is permanent and cannot be undone.</div>' +
+			'<div class="sm-modal-footer">' +
+			'<button type="button" id="smCancelBtn" class="sm-btn sm-btn-cancel">Cancel</button>' +
+			'<button type="button" id="smConfirmBtn" class="sm-btn sm-btn-delete">Delete Records</button>' +
+			"</div></div></div>";
 
-		form.addSubmitButton({ label: "Delete Records" });
+		form.addSubmitButton({ label: "Preview Deletion" });
 		context.response.writePage(form);
 	}
 
@@ -628,16 +774,27 @@ define([
 			context.request.parameters.custpage_chain_completed || "";
 		var isChainRequest = chainTotal > 0;
 
+		// Running deleted/failed totals carried across chain steps (grouped deletes)
+		var accDeleted = parseInt(
+			context.request.parameters.custpage_acc_deleted || "0",
+			10,
+		);
+		var accFailed = parseInt(
+			context.request.parameters.custpage_acc_failed || "0",
+			10,
+		);
+		var accResults = context.request.parameters.custpage_acc_results || "";
+
 		// Validate required fields (skip for chain requests — already validated)
 		if (!isChainRequest && (!recordType || !subsidiaryId || !pushMode || !deleteMode)) {
 			context.response.write(
-				'<h3 style="color: red;">Please select a subsidiary, push mode, record type, and delete by date option.</h3>' +
+				'<h3 style="color: red;">Please select a subsidiary, External ID option, record type, and date filter option.</h3>' +
 					'<p><a href="javascript:history.back()">Go Back</a></p>',
 			);
 			return;
 		}
 
-		// Validate Transaction Date To when Transaction Date Range is selected
+		// Validate Transaction Date To when Transaction Date is selected
 		if (deleteMode === "trandate" && !tranDateTo) {
 			context.response.write(
 				'<h3 style="color: red;">Please provide a Transaction Date To.</h3>' +
@@ -646,7 +803,7 @@ define([
 			return;
 		}
 
-		// Validate Creation Date To when Creation Date Range is selected
+		// Validate Creation Date To when Created Date is selected
 		if (deleteMode === "createddate" && !createdDateTo) {
 			context.response.write(
 				'<h3 style="color: red;">Please provide a Creation Date To.</h3>' +
@@ -761,7 +918,15 @@ define([
 				};
 			}
 
-			renderProgressPage(context, taskId, currentType, chainInfo);
+			renderProgressPage(
+				context,
+				taskId,
+				currentType,
+				chainInfo,
+				accDeleted,
+				accFailed,
+				accResults,
+			);
 		} catch (error) {
 			log.error("Error Submitting Task", error);
 
@@ -796,10 +961,53 @@ define([
 				percentComplete = taskStatus.getPercentageCompleted();
 			}
 
+			// Reduce counts drive an accurate, deletion-based progress bar.
+			// Deletion happens in the reduce phase and map emits one key per
+			// record, so totalReduce ~= records to delete and pendingReduce =
+			// records not yet processed. All guarded in case a getter is absent.
+			var stage = "";
+			var totalReduce = 0;
+			var pendingReduce = 0;
+			try {
+				stage = taskStatus.getCurrentStage() || "";
+			} catch (e) {}
+			try {
+				totalReduce = taskStatus.getTotalReduceCount() || 0;
+			} catch (e) {}
+			try {
+				pendingReduce = taskStatus.getPendingReduceCount() || 0;
+			} catch (e) {}
+
+			// On completion, read the deleted/failed counts the Map/Reduce
+			// wrote to the shared cache. Best-effort — null if unavailable.
+			var deleted = null;
+			var failed = null;
+			if (taskStatus.status === "COMPLETE") {
+				try {
+					var resultCache = cache.getCache({
+						name: RESULT_CACHE_NAME,
+						scope: cache.Scope.PUBLIC,
+					});
+					var cachedResult = resultCache.get({
+						key: RESULT_CACHE_KEY,
+					});
+					if (cachedResult) {
+						var parsed = JSON.parse(cachedResult);
+						deleted = parsed.deleted;
+						failed = parsed.failed;
+					}
+				} catch (e) {}
+			}
+
 			context.response.write(
 				JSON.stringify({
 					status: taskStatus.status,
 					percentComplete: percentComplete,
+					stage: stage,
+					totalReduce: totalReduce,
+					pendingReduce: pendingReduce,
+					deleted: deleted,
+					failed: failed,
 				}),
 			);
 		} catch (e) {
@@ -809,7 +1017,32 @@ define([
 		}
 	}
 
-	function renderProgressPage(context, taskId, recordType, chainInfo) {
+	function renderProgressPage(
+		context,
+		taskId,
+		recordType,
+		chainInfo,
+		accDeleted,
+		accFailed,
+		accResults,
+	) {
+		accDeleted = accDeleted || 0;
+		accFailed = accFailed || 0;
+		accResults = accResults || "";
+
+		// Parse per-type results carried across chain steps.
+		// Format: "type:deleted:failed|type:deleted:failed"
+		var resultsMap = {};
+		if (accResults) {
+			var resultEntries = accResults.split("|");
+			for (var ri = 0; ri < resultEntries.length; ri++) {
+				var rp = resultEntries[ri].split(":");
+				if (rp.length === 3) {
+					resultsMap[rp[0]] = { d: rp[1], f: rp[2] };
+				}
+			}
+		}
+
 		var suiteletUrl = url.resolveScript({
 			scriptId: runtime.getCurrentScript().id,
 			deploymentId: runtime.getCurrentScript().deploymentId,
@@ -841,27 +1074,47 @@ define([
 				")</h3>";
 			typeListHtml += '<div class="type-list">';
 
-			// Completed types
+			// Completed types (with per-type deleted/failed counts when known)
 			for (var c = 0; c < completedArr.length; c++) {
 				if (completedArr[c]) {
+					var ctype = completedArr[c];
+					var cLabel = RECORD_LABELS[ctype] || ctype;
+					var cDel = resultsMap[ctype]
+						? "Deleted: " + resultsMap[ctype].d
+						: "";
+					var cFail = resultsMap[ctype]
+						? "Failed: " + resultsMap[ctype].f
+						: "";
+					var cHasFail =
+						resultsMap[ctype] && Number(resultsMap[ctype].f) > 0;
 					typeListHtml +=
-						'<div class="type-item type-done">' +
-						(RECORD_LABELS[completedArr[c]] || completedArr[c]) +
-						' <span class="type-badge badge-done">Completed</span></div>';
+						'<div class="type-item ' +
+						(cHasFail ? "type-warn" : "type-done") +
+						'"><span class="type-name">' +
+						cLabel +
+						'</span><span class="type-del">' +
+						cDel +
+						'</span><span class="type-fail' +
+						(cHasFail ? " has-fail" : "") +
+						'">' +
+						cFail +
+						'</span><span class="type-badge ' +
+						(cHasFail ? "badge-warn" : "badge-done") +
+						'">Completed</span></div>';
 				}
 			}
-			// Current type
+			// Current type (counts filled in by the client on completion)
 			typeListHtml +=
-				'<div class="type-item type-current">' +
+				'<div class="type-item type-current"><span class="type-name">' +
 				recordLabel +
-				' <span class="type-badge badge-current">Processing</span></div>';
+				'</span><span class="type-del" id="curDel"></span><span class="type-fail" id="curFail"></span><span class="type-badge badge-current">Processing</span></div>';
 			// Remaining types
 			for (var r = 0; r < remainingArr.length; r++) {
 				if (remainingArr[r]) {
 					typeListHtml +=
-						'<div class="type-item type-pending">' +
+						'<div class="type-item type-pending"><span class="type-name">' +
 						(RECORD_LABELS[remainingArr[r]] || remainingArr[r]) +
-						' <span class="type-badge badge-pending">Pending</span></div>';
+						'</span><span class="type-del"></span><span class="type-fail"></span><span class="type-badge badge-pending">Pending</span></div>';
 				}
 			}
 			typeListHtml += "</div></div>";
@@ -929,6 +1182,12 @@ define([
 				'<input type="hidden" name="custpage_chain_completed" value="' +
 				newCompleted +
 				'">';
+			chainFormHtml +=
+				'<input type="hidden" name="custpage_acc_deleted" id="accDeletedField" value="">';
+			chainFormHtml +=
+				'<input type="hidden" name="custpage_acc_failed" id="accFailedField" value="">';
+			chainFormHtml +=
+				'<input type="hidden" name="custpage_acc_results" id="accResultsField" value="">';
 			chainFormHtml += "</form>";
 		}
 
@@ -962,17 +1221,27 @@ define([
 			".btn:hover { background-color: #1565c0; }" +
 			".btn-disabled { background-color: #ccc; cursor: not-allowed; pointer-events: none; }" +
 			".note { font-size: 12px; color: #888; margin-top: 15px; text-align: center; }" +
+			".summary-box { display: none; margin: 18px 0 0; padding: 14px 16px; border-radius: 6px; background: #eef7f0; border: 1px solid #cfe8d4; text-align: center; font-size: 16px; color: #333; }" +
+			".summary-box .s-deleted { color: #2e7d32; font-weight: 700; }" +
+			".summary-box .s-failed-has { color: #c62828; font-weight: 700; }" +
+			".summary-box .s-failed-none { color: #2e7d32; font-weight: 700; }" +
 			".chain-progress { margin: 20px 0; padding: 15px; background: #fafafa; border-radius: 6px; border: 1px solid #e0e0e0; }" +
 			".chain-progress h3 { margin: 0 0 12px 0; font-size: 14px; color: #555; }" +
 			".type-list { display: flex; flex-direction: column; gap: 6px; }" +
-			".type-item { padding: 8px 12px; border-radius: 4px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }" +
-			".type-done { background: #e8f5e9; color: #2e7d32; }" +
+			".type-item { padding: 8px 12px; border-radius: 4px; font-size: 13px; display: flex; align-items: center; }" +
+			".type-name { flex: 0 0 190px; padding-right: 10px; line-height: 1.35; overflow-wrap: break-word; }" +
+			".type-del { flex: 0 0 105px; font-size: 12px; font-weight: normal; }" +
+			".type-fail { flex: 0 0 90px; font-size: 12px; font-weight: normal; }" +
+			".type-done { background: #e8f5e9; color: #333; }" +
 			".type-current { background: #e3f2fd; color: #1565c0; font-weight: bold; }" +
 			".type-pending { background: #f5f5f5; color: #999; }" +
-			".type-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }" +
+			".type-warn { background: #fff8e1; color: #333; }" +
+			".type-fail.has-fail { color: #c62828; font-weight: 600; }" +
+			".type-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; margin-left: auto; }" +
 			".badge-done { background: #c8e6c9; color: #2e7d32; }" +
 			".badge-current { background: #bbdefb; color: #1565c0; }" +
 			".badge-pending { background: #e0e0e0; color: #999; }" +
+			".badge-warn { background: #ffe0b2; color: #8a6d00; }" +
 			"</style>" +
 			"</head><body>" +
 			'<div class="container">' +
@@ -987,6 +1256,7 @@ define([
 			'<div class="progress-text" id="progressText">0%</div>' +
 			"</div>" +
 			'<div class="status status-starting" id="statusBox">Starting...</div>' +
+			'<div class="summary-box" id="summaryBox"></div>' +
 			typeListHtml +
 			chainFormHtml +
 			'<a class="btn btn-disabled" id="backBtn" href="' +
@@ -1010,6 +1280,18 @@ define([
 			"var chainTotal = " +
 			chainTotal +
 			";" +
+			"var accDeleted = " +
+			accDeleted +
+			";" +
+			"var accFailed = " +
+			accFailed +
+			";" +
+			"var accResults = " +
+			JSON.stringify(accResults) +
+			";" +
+			"var currentRecordType = " +
+			JSON.stringify(recordType) +
+			";" +
 			"var refreshInterval = null;" +
 			"var isComplete = false;" +
 			"var maxPercent = 0;" +
@@ -1024,45 +1306,79 @@ define([
 			'      var progressText = document.getElementById("progressText");' +
 			'      var backBtn = document.getElementById("backBtn");' +
 			'      var noteText = document.getElementById("noteText");' +
-			"      var percent = Math.round(data.percentComplete || 0);" +
 			'      if (data.status === "PENDING") {' +
 			'        statusBox.className = "status status-starting";' +
 			'        statusBox.textContent = "Starting...";' +
 			'        progressText.textContent = "0%";' +
 			'      } else if (data.status === "PROCESSING") {' +
 			'        statusBox.className = "status status-progress";' +
-			'        statusBox.textContent = "In Progress...";' +
-			"        if (percent > maxPercent) { maxPercent = percent; }" +
-			"        if (maxPercent >= 100) { maxPercent = 95; }" +
-			'        progressFill.style.width = maxPercent + "%";' +
-			'        progressText.textContent = maxPercent + "%";' +
+			"        var total = data.totalReduce || 0;" +
+			"        var pending = data.pendingReduce || 0;" +
+			"        if (total > 0) {" +
+			"          var done = total - pending; if (done < 0) { done = 0; }" +
+			"          var pct = Math.round((done / total) * 100);" +
+			"          if (pct > 99) { pct = 99; }" +
+			"          if (pct > maxPercent) { maxPercent = pct; }" +
+			'          progressFill.style.width = maxPercent + "%";' +
+			'          progressText.textContent = maxPercent + "%";' +
+			'          statusBox.textContent = "Deleting: " + done.toLocaleString() + " of " + total.toLocaleString() + " records";' +
+			"        } else {" +
+			'          statusBox.textContent = "Scanning records...";' +
+			'          progressFill.style.width = "5%";' +
+			'          progressText.textContent = "";' +
+			"        }" +
 			'      } else if (data.status === "COMPLETE") {' +
 			'        statusBox.className = "status status-complete";' +
 			'        progressFill.style.width = "100%";' +
 			'        progressText.textContent = "100%";' +
 			"        isComplete = true;" +
 			"        clearInterval(refreshInterval);" +
+			"        var runDeleted = (typeof data.deleted === 'number') ? data.deleted : null;" +
+			"        var runFailed = (typeof data.failed === 'number') ? data.failed : 0;" +
+			"        var totDeleted = accDeleted + (runDeleted || 0);" +
+			"        var totFailed = accFailed + (runFailed || 0);" +
+			"        var haveCounts = (runDeleted !== null);" +
+			"        var showSummary = function(label) {" +
+			"          var sb = document.getElementById('summaryBox');" +
+			"          if (!sb || !haveCounts) return;" +
+			"          var failClass = totFailed > 0 ? 's-failed-has' : 's-failed-none';" +
+			"          sb.style.display = 'block';" +
+			"          sb.innerHTML = (label ? '<b>' + label + '</b> &mdash; ' : '') + '<span class=\"s-deleted\">Deleted: ' + totDeleted.toLocaleString() + '</span> &nbsp;&middot;&nbsp; <span class=\"' + failClass + '\">Failed: ' + totFailed.toLocaleString() + '</span>';" +
+			"        };" +
+			"        var runEntry = currentRecordType + ':' + (runDeleted || 0) + ':' + (runFailed || 0);" +
+			"        var newResults = accResults ? (accResults + '|' + runEntry) : runEntry;" +
+			"        var curHasFail = (runFailed || 0) > 0;" +
+			"        var cd = document.getElementById('curDel');" +
+			"        var cf2 = document.getElementById('curFail');" +
+			"        if (haveCounts) {" +
+			"          if (cd) { cd.textContent = 'Deleted: ' + (runDeleted || 0).toLocaleString(); }" +
+			"          if (cf2) { cf2.textContent = 'Failed: ' + (runFailed || 0).toLocaleString(); if (curHasFail) { cf2.className = 'type-fail has-fail'; } }" +
+			"        }" +
+			"        var curItem = document.querySelector('.type-current');" +
+			"        if (curItem) {" +
+			"          curItem.className = curHasFail ? 'type-item type-warn' : 'type-item type-done';" +
+			"          var badge = curItem.querySelector('.type-badge');" +
+			"          if (badge) { badge.className = curHasFail ? 'type-badge badge-warn' : 'type-badge badge-done'; badge.textContent = 'Completed'; }" +
+			"        }" +
 			"        if (hasChainRemaining) {" +
 			'          statusBox.textContent = "Completed — submitting next type...";' +
-			'          noteText.textContent = "Moving to next record type...";' +
+			"          noteText.textContent = 'Moving to next record type...';" +
+			"          var af = document.getElementById('accDeletedField'); if (af) { af.value = totDeleted; }" +
+			"          var ff = document.getElementById('accFailedField'); if (ff) { ff.value = totFailed; }" +
+			"          var rf = document.getElementById('accResultsField'); if (rf) { rf.value = newResults; }" +
 			"          setTimeout(function() {" +
 			'            document.getElementById("chainForm").submit();' +
 			"          }, 1500);" +
 			"        } else {" +
 			'          statusBox.textContent = "Completed";' +
 			'          backBtn.className = "btn";' +
-			'          noteText.textContent = "Done. You can now start a new deletion.";' +
-			"          var curItem = document.querySelector('.type-current');" +
-			"          if (curItem) {" +
-			"            curItem.className = 'type-item type-done';" +
-			"            var badge = curItem.querySelector('.type-badge');" +
-			"            if (badge) { badge.className = 'type-badge badge-done'; badge.textContent = 'Completed'; }" +
-			"          }" +
+			"          noteText.textContent = 'You can now start a new deletion.';" +
+			"          showSummary(isChain ? 'Total' : '');" +
 			"          if (isChain) {" +
-			'            document.getElementById("titleText").textContent = "All Records Deleted";' +
-			'            document.getElementById("subtitleText").textContent = "All " + chainTotal + " record types processed successfully";' +
-			'            var cpt = document.getElementById("chainProgressTitle");' +
-			'            if (cpt) { cpt.textContent = "All " + chainTotal + " of " + chainTotal + " Completed"; }' +
+			"            document.getElementById('titleText').textContent = (totFailed > 0) ? 'Deletion Complete' : 'All Records Deleted';" +
+			"            document.getElementById('subtitleText').textContent = (totFailed > 0) ? ('All ' + chainTotal + ' record types processed \\u2014 ' + totFailed.toLocaleString() + ' record(s) could not be deleted') : ('All ' + chainTotal + ' record types processed successfully');" +
+			"            var cpt = document.getElementById('chainProgressTitle');" +
+			"            if (cpt) { cpt.textContent = 'All ' + chainTotal + ' of ' + chainTotal + ' Completed'; }" +
 			"          }" +
 			"        }" +
 			'      } else if (data.status === "FAILED") {' +
@@ -1077,7 +1393,7 @@ define([
 			"    .catch(function(e) { });" +
 			"}" +
 			"checkStatus();" +
-			"refreshInterval = setInterval(checkStatus, 2000);" +
+			"refreshInterval = setInterval(checkStatus, 1000);" +
 			"</script>" +
 			"</body></html>";
 

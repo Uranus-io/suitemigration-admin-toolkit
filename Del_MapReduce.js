@@ -3,7 +3,7 @@
  * @NScriptType MapReduceScript
  * @version v1.0
  *
- * Name: SuiteMigration Mass Purge
+ * Name: SuiteMigration Admin Toolkit
  * Description: Automated bulk cleanup and data reset utility for NetSuite Admins & Consultants.
  * Publisher: SuiteMigration (https://suitemigration.com)
  * License: SuiteMigration Free Utility License (See LICENSE file or https://suitemigration.com/license)
@@ -36,12 +36,17 @@
  *
  * See DEPLOYMENT_GUIDE.md for full setup instructions.
  */
-define(["N/search", "N/record", "N/runtime", "N/log"], function (
+define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 	search,
 	record,
 	runtime,
 	log,
+	cache,
 ) {
+	// Cache used to hand the final deleted/failed counts back to the Suitelet
+	// for on-screen display. Shared (PUBLIC) so the Suitelet can read it.
+	var RESULT_CACHE_NAME = "smAdminToolkit";
+	var RESULT_CACHE_KEY = "lastDeleteResult";
 	/**
 	 * Transaction record types — these support "trandate" filtering.
 	 * Entity types (customer, vendor) and items do NOT have trandate.
@@ -160,13 +165,23 @@ define(["N/search", "N/record", "N/runtime", "N/log"], function (
 			}
 		}
 
-		// For journalentry_sm: use a formula filter to match externalid substrings.
-		// Direct "contains" operator is not supported on the externalid search field,
-		// so we use an Oracle LIKE expression via formulatext instead.
+		// SuiteMigration Trial Balance push journal entries carry externalid
+		// substrings sm_net / sm_rebuild / sm_manual. Direct "contains" is not
+		// supported on the externalid search field, so we use an Oracle LIKE
+		// expression via formulatext instead.
+		// Include only these records when deleting Trial Balance push JEs;
+		// exclude them when deleting regular journal entries.
 		if (isSmJE) {
 			filters.push("AND");
 			filters.push([
 				"formulatext: CASE WHEN ({externalid} LIKE '%sm_net%' OR {externalid} LIKE '%sm_rebuild%' OR {externalid} LIKE '%sm_manual%') THEN '1' ELSE '0' END",
+				"is",
+				"1",
+			]);
+		} else if (recordType === "journalentry") {
+			filters.push("AND");
+			filters.push([
+				"formulatext: CASE WHEN ({externalid} LIKE '%sm_net%' OR {externalid} LIKE '%sm_rebuild%' OR {externalid} LIKE '%sm_manual%') THEN '0' ELSE '1' END",
 				"is",
 				"1",
 			]);
@@ -210,21 +225,32 @@ define(["N/search", "N/record", "N/runtime", "N/log"], function (
 			]);
 		}
 
-		// Push Mode filter: match SM external ID format ({org_id}__{source_id}__{prefix}_{id})
-		// with known SM prefixes (cmp_, txn_, itm_) plus JE-specific (sm_net, sm_rebuild, sm_manual).
-		// If a new record type prefix is added to SM, update this list.
-		// "manually_created" = no external ID or external ID not matching SM format.
-		if (pushMode === "sm_pushed") {
+		// External ID filter. Values sent by the Suitelet:
+		//   "all"       -> no filter (records with or without an External ID)
+		//   "populated" -> records that HAVE any External ID (not blank)
+		//   "blank"     -> records with NO External ID
+		//   "sm_match"  -> External ID matches the SuiteMigration format
+		//                  ({org_id}__{source_id}__{prefix}_{id} with prefixes
+		//                  cmp_/txn_/itm_, plus JE-specific sm_net/sm_rebuild/sm_manual).
+		//                  If a new record type prefix is added to SM, update this list.
+		if (pushMode === "sm_match") {
 			filters.push("AND");
 			filters.push([
 				"formulatext: CASE WHEN REGEXP_LIKE({externalid}, '.+__.+__(cmp|txn|itm)_') OR {externalid} LIKE 'sm_net%' OR {externalid} LIKE 'sm_rebuild%' OR {externalid} LIKE 'sm_manual%' THEN '1' ELSE '0' END",
 				"is",
 				"1",
 			]);
-		} else if (pushMode === "manually_created") {
+		} else if (pushMode === "populated") {
 			filters.push("AND");
 			filters.push([
-				"formulatext: CASE WHEN {externalid} IS NULL OR NOT (REGEXP_LIKE({externalid}, '.+__.+__(cmp|txn|itm)_') OR {externalid} LIKE 'sm_net%' OR {externalid} LIKE 'sm_rebuild%' OR {externalid} LIKE 'sm_manual%') THEN '1' ELSE '0' END",
+				"formulatext: CASE WHEN {externalid} IS NOT NULL THEN '1' ELSE '0' END",
+				"is",
+				"1",
+			]);
+		} else if (pushMode === "blank") {
+			filters.push("AND");
+			filters.push([
+				"formulatext: CASE WHEN {externalid} IS NULL THEN '1' ELSE '0' END",
 				"is",
 				"1",
 			]);
@@ -508,6 +534,26 @@ define(["N/search", "N/record", "N/runtime", "N/log"], function (
 			"Summary",
 			"Deleted: " + totalDeleted + ", Failed: " + totalFailed,
 		);
+
+		// Publish the counts so the Suitelet can display them on completion.
+		// Best-effort: if the cache write fails, the UI simply falls back to
+		// "see log for counts" — it never affects the deletion itself.
+		try {
+			var resultCache = cache.getCache({
+				name: RESULT_CACHE_NAME,
+				scope: cache.Scope.PUBLIC,
+			});
+			resultCache.put({
+				key: RESULT_CACHE_KEY,
+				value: JSON.stringify({
+					deleted: totalDeleted,
+					failed: totalFailed,
+				}),
+				ttl: 3600,
+			});
+		} catch (e) {
+			log.error("Result cache write failed", e);
+		}
 	}
 
 	return {
