@@ -34,7 +34,7 @@ The Record Deletion Tool consists of two scripts:
 | Field | Value |
 |-------|-------|
 | Name | Delete Records Map/Reduce (or any preferred ID)
-| ID | `_delete1` (NetSuite will prefix with `customscript`) |
+| ID | `_sm_toolkit_delete_mr` (NetSuite will prefix with `customscript`) |
 | Description | Map/Reduce script for bulk record deletion |
 
 5. Click **Save**
@@ -51,7 +51,7 @@ After saving the script, you need to add six parameters:
 | Field | Value |
 |-------|-------|
 | Label | Record Type |
-| ID | `_recordtype` (NetSuite will prefix with `custscript`) |
+| ID | `_sm_recordtype` (NetSuite will prefix with `custscript`) |
 | Type | Free-Form Text |
 
 3. Click **Save & New** and create the second parameter:
@@ -59,15 +59,15 @@ After saving the script, you need to add six parameters:
 | Field | Value |
 |-------|-------|
 | Label | Subsidiary |
-| ID | `_subsidiary` (NetSuite will prefix with `custscript`) |
+| ID | `_sm_subsidiary` (NetSuite will prefix with `custscript`) |
 | Type | Free-Form Text |
 
 4. Click **Save & New** and create the third parameter:
 
 | Field | Value |
 |-------|-------|
-| Label | Push Mode |
-| ID | `_pushmode` (NetSuite will prefix with `custscript`) |
+| Label | External ID |
+| ID | `_sm_externalid` (NetSuite will prefix with `custscript`) |
 | Type | Free-Form Text |
 
 5. Click **Save & New** and create the fourth parameter:
@@ -75,7 +75,7 @@ After saving the script, you need to add six parameters:
 | Field | Value |
 |-------|-------|
 | Label | Transaction Date From |
-| ID | `_trandatefrom` (NetSuite will prefix with `custscript`) |
+| ID | `_sm_trandate_from` (NetSuite will prefix with `custscript`) |
 | Type | Free-Form Text |
 
 6. Click **Save & New** and create the fifth parameter:
@@ -83,7 +83,7 @@ After saving the script, you need to add six parameters:
 | Field | Value |
 |-------|-------|
 | Label | Transaction Date To |
-| ID | `_trandateto` (NetSuite will prefix with `custscript`) |
+| ID | `_sm_trandate_to` (NetSuite will prefix with `custscript`) |
 | Type | Free-Form Text |
 
 7. Click **Save & New** and create the sixth parameter:
@@ -91,7 +91,7 @@ After saving the script, you need to add six parameters:
 | Field | Value |
 |-------|-------|
 | Label | Created Date From |
-| ID | `_createddatefrom` (NetSuite will prefix with `custscript`) |
+| ID | `_sm_createddate_from` (NetSuite will prefix with `custscript`) |
 | Type | Free-Form Text |
 
 8. Click **Save & New** and create the seventh parameter:
@@ -99,19 +99,19 @@ After saving the script, you need to add six parameters:
 | Field | Value |
 |-------|-------|
 | Label | Created Date To |
-| ID | `_createddateto` (NetSuite will prefix with `custscript`) |
+| ID | `_sm_createddate_to` (NetSuite will prefix with `custscript`) |
 | Type | Free-Form Text |
 
 9. Click **Save**
 
 > **Important**: Enter the ID without the `custscript_` prefix. NetSuite automatically adds it.
-> - Enter `_recordtype` → becomes `custscript_recordtype`
-> - Enter `_subsidiary` → becomes `custscript_subsidiary`
-> - Enter `_pushmode` → becomes `custscript_pushmode`
-> - Enter `_trandatefrom` → becomes `custscript_trandatefrom`
-> - Enter `_trandateto` → becomes `custscript_trandateto`
-> - Enter `_createddatefrom` → becomes `custscript_createddatefrom`
-> - Enter `_createddateto` → becomes `custscript_createddateto`
+> - Enter `_sm_recordtype` → becomes `custscript_sm_recordtype`
+> - Enter `_sm_subsidiary` → becomes `custscript_sm_subsidiary`
+> - Enter `_sm_externalid` → becomes `custscript_sm_externalid`
+> - Enter `_sm_trandate_from` → becomes `custscript_sm_trandate_from`
+> - Enter `_sm_trandate_to` → becomes `custscript_sm_trandate_to`
+> - Enter `_sm_createddate_from` → becomes `custscript_sm_createddate_from`
+> - Enter `_sm_createddate_to` → becomes `custscript_sm_createddate_to`
 
 ---
 
@@ -124,7 +124,7 @@ After saving the script, you need to add six parameters:
 | Field | Value |
 |-------|-------|
 | Title | Delete Records Deployment (or any preferred ID)
-| ID | `_delete2` (NetSuite will prefix with `customdeploy`) |
+| ID | `_sm_toolkit_delete_mr` (NetSuite will prefix with `customdeploy`) |
 | Status | Released |
 | Log Level | Debug |
 | Execute As Role | Administrator (or appropriate role) |
@@ -261,11 +261,11 @@ If you previously deployed the tool with the old parameters (`custscript_datefro
 
 1. Remove the old parameters: `custscript_datefrom` and `custscript_dateto`
 2. Add the new parameters as described in Step 3:
-   - `custscript_pushmode`
-   - `custscript_trandatefrom`
-   - `custscript_trandateto`
-   - `custscript_createddatefrom`
-   - `custscript_createddateto`
+   - `custscript_sm_externalid`
+   - `custscript_sm_trandate_from`
+   - `custscript_sm_trandate_to`
+   - `custscript_sm_createddate_from`
+   - `custscript_sm_createddate_to`
 3. Upload the updated script files
 
 ---
@@ -278,15 +278,15 @@ The following IDs are hardcoded in the script and **must match exactly** in NetS
 
 | What to Create | Required ID | Full ID After Save |
 |----------------|-------------|-------------------|
-| Map/Reduce Script | `_delete1` | `customscript_delete1` |
-| Map/Reduce Deployment | `_delete2` | `customdeploy_delete2` |
-| Parameter 1 | `_recordtype` | `custscript_recordtype` |
-| Parameter 2 | `_subsidiary` | `custscript_subsidiary` |
-| Parameter 3 | `_pushmode` | `custscript_pushmode` |
-| Parameter 4 | `_trandatefrom` | `custscript_trandatefrom` |
-| Parameter 5 | `_trandateto` | `custscript_trandateto` |
-| Parameter 6 | `_createddatefrom` | `custscript_createddatefrom` |
-| Parameter 7 | `_createddateto` | `custscript_createddateto` |
+| Map/Reduce Script | `_sm_toolkit_delete_mr` | `customscript_sm_toolkit_delete_mr` |
+| Map/Reduce Deployment | `_sm_toolkit_delete_mr` | `customdeploy_sm_toolkit_delete_mr` |
+| Parameter 1 | `_sm_recordtype` | `custscript_sm_recordtype` |
+| Parameter 2 | `_sm_subsidiary` | `custscript_sm_subsidiary` |
+| Parameter 3 | `_sm_externalid` | `custscript_sm_externalid` |
+| Parameter 4 | `_sm_trandate_from` | `custscript_sm_trandate_from` |
+| Parameter 5 | `_sm_trandate_to` | `custscript_sm_trandate_to` |
+| Parameter 6 | `_sm_createddate_from` | `custscript_sm_createddate_from` |
+| Parameter 7 | `_sm_createddate_to` | `custscript_sm_createddate_to` |
 
 > **If any ID doesn't match, the tool will fail with errors.**
 
@@ -309,11 +309,11 @@ The following IDs are hardcoded in the script and **must match exactly** in NetS
 
 | Component | ID |
 |-----------|-----|
-| Map/Reduce Script | `customscript_delete1` |
-| Map/Reduce Deployment | `customdeploy_delete2` |
-| Script Parameter - Record Type | `custscript_recordtype` |
-| Script Parameter - Subsidiary | `custscript_subsidiary` |
-| Script Parameter - Transaction Date From | `custscript_trandatefrom` |
-| Script Parameter - Transaction Date To | `custscript_trandateto` |
-| Script Parameter - Created Date From | `custscript_createddatefrom` |
-| Script Parameter - Created Date To | `custscript_createddateto` |
+| Map/Reduce Script | `customscript_sm_toolkit_delete_mr` |
+| Map/Reduce Deployment | `customdeploy_sm_toolkit_delete_mr` |
+| Script Parameter - Record Type | `custscript_sm_recordtype` |
+| Script Parameter - Subsidiary | `custscript_sm_subsidiary` |
+| Script Parameter - Transaction Date From | `custscript_sm_trandate_from` |
+| Script Parameter - Transaction Date To | `custscript_sm_trandate_to` |
+| Script Parameter - Created Date From | `custscript_sm_createddate_from` |
+| Script Parameter - Created Date To | `custscript_sm_createddate_to` |

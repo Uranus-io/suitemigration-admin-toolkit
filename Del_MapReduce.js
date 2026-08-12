@@ -20,11 +20,11 @@
  * - Map phase only collects and emits data (minimal governance usage)
  *
  * Required IDs (must match exactly):
- * - Script ID: customscript_delete1
- * - Deployment ID: customdeploy_delete2
- * - Parameters: custscript_recordtype, custscript_subsidiary,
- *   custscript_pushmode, custscript_trandatefrom, custscript_trandateto,
- *   custscript_createddatefrom, custscript_createddateto
+ * - Script ID: customscript_sm_toolkit_delete_mr
+ * - Deployment ID: customdeploy_sm_toolkit_delete_mr
+ * - Parameters: custscript_sm_recordtype, custscript_sm_subsidiary,
+ *   custscript_sm_externalid, custscript_sm_trandate_from, custscript_sm_trandate_to,
+ *   custscript_sm_createddate_from, custscript_sm_createddate_to
  *
  * Date filtering:
  * - Transaction Date (trandate): Only applies to transaction record types.
@@ -74,25 +74,25 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 	function getInputData() {
 		var scriptObj = runtime.getCurrentScript();
 		var recordType = scriptObj.getParameter({
-			name: "custscript_recordtype",
+			name: "custscript_sm_recordtype",
 		});
 		var subsidiaryId = scriptObj.getParameter({
-			name: "custscript_subsidiary",
+			name: "custscript_sm_subsidiary",
 		});
-		var pushMode = scriptObj.getParameter({
-			name: "custscript_pushmode",
+		var externalIdMode = scriptObj.getParameter({
+			name: "custscript_sm_externalid",
 		});
 		var tranDateFrom = scriptObj.getParameter({
-			name: "custscript_trandatefrom",
+			name: "custscript_sm_trandate_from",
 		});
 		var tranDateTo = scriptObj.getParameter({
-			name: "custscript_trandateto",
+			name: "custscript_sm_trandate_to",
 		});
 		var createdDateFrom = scriptObj.getParameter({
-			name: "custscript_createddatefrom",
+			name: "custscript_sm_createddate_from",
 		});
 		var createdDateTo = scriptObj.getParameter({
-			name: "custscript_createddateto",
+			name: "custscript_sm_createddate_to",
 		});
 
 		if (!recordType || !subsidiaryId) {
@@ -121,8 +121,8 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 				recordType +
 				", Subsidiary: " +
 				subsidiaryId +
-				", Push Mode: " +
-				(pushMode || "N/A") +
+				", External ID: " +
+				(externalIdMode || "N/A") +
 				", Is Transaction: " +
 				isTransaction +
 				", Tran Date: " +
@@ -233,21 +233,21 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 		//                  ({org_id}__{source_id}__{prefix}_{id} with prefixes
 		//                  cmp_/txn_/itm_, plus JE-specific sm_net/sm_rebuild/sm_manual).
 		//                  If a new record type prefix is added to SM, update this list.
-		if (pushMode === "sm_match") {
+		if (externalIdMode === "sm_match") {
 			filters.push("AND");
 			filters.push([
 				"formulatext: CASE WHEN REGEXP_LIKE({externalid}, '.+__.+__(cmp|txn|itm)_') OR {externalid} LIKE 'sm_net%' OR {externalid} LIKE 'sm_rebuild%' OR {externalid} LIKE 'sm_manual%' THEN '1' ELSE '0' END",
 				"is",
 				"1",
 			]);
-		} else if (pushMode === "populated") {
+		} else if (externalIdMode === "populated") {
 			filters.push("AND");
 			filters.push([
 				"formulatext: CASE WHEN {externalid} IS NOT NULL THEN '1' ELSE '0' END",
 				"is",
 				"1",
 			]);
-		} else if (pushMode === "blank") {
+		} else if (externalIdMode === "blank") {
 			filters.push("AND");
 			filters.push([
 				"formulatext: CASE WHEN {externalid} IS NULL THEN '1' ELSE '0' END",

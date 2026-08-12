@@ -17,11 +17,11 @@
  * This Suitelet calls the Map/Reduce script (Del_MapReduce.js).
  *
  * Required IDs for Map/Reduce (must match exactly):
- * - Script ID: customscript_delete1
- * - Deployment ID: customdeploy_delete2
- * - Parameters: custscript_recordtype, custscript_subsidiary,
- *   custscript_pushmode, custscript_trandatefrom, custscript_trandateto,
- *   custscript_createddatefrom, custscript_createddateto
+ * - Script ID: customscript_sm_toolkit_delete_mr
+ * - Deployment ID: customdeploy_sm_toolkit_delete_mr
+ * - Parameters: custscript_sm_recordtype, custscript_sm_subsidiary,
+ *   custscript_sm_externalid, custscript_sm_trandate_from, custscript_sm_trandate_to,
+ *   custscript_sm_createddate_from, custscript_sm_createddate_to
  *
  * See DEPLOYMENT_GUIDE.md for full setup instructions.
  */
@@ -301,13 +301,13 @@ define([
 			"    var sub = ''; var rec = ''; var mode = 'all'; var pm = '';" +
 			"    var subVal = ''; var recVal = ''; var pmVal = '';" +
 			"    try { subVal = nlapiGetFieldValue('custpage_subsidiary') || ''; } catch(e) {}" +
-			"    try { recVal = nlapiGetFieldValue('custpage_delete_action') || ''; } catch(e) {}" +
-			"    try { pmVal = nlapiGetFieldValue('custpage_pushmode') || ''; } catch(e) {}" +
+			"    try { recVal = nlapiGetFieldValue('custpage_recordtype') || ''; } catch(e) {}" +
+			"    try { pmVal = nlapiGetFieldValue('custpage_externalid') || ''; } catch(e) {}" +
 			"    if (!subVal || !recVal || !pmVal) { div.innerHTML = ''; return; }" +
 			"    try { sub = nlapiGetFieldText('custpage_subsidiary') || ''; } catch(e) {}" +
-			"    try { rec = nlapiGetFieldText('custpage_delete_action') || ''; } catch(e) {}" +
-			"    try { pm = nlapiGetFieldText('custpage_pushmode') || ''; } catch(e) {}" +
-			"    try { mode = nlapiGetFieldValue('custpage_deletemode') || 'all'; } catch(e) {}" +
+			"    try { rec = nlapiGetFieldText('custpage_recordtype') || ''; } catch(e) {}" +
+			"    try { pm = nlapiGetFieldText('custpage_externalid') || ''; } catch(e) {}" +
+			"    try { mode = nlapiGetFieldValue('custpage_datefilter') || 'all'; } catch(e) {}" +
 			"    var isGroup = (recVal === 'all_records' || recVal === 'all_entities' || recVal === 'all_transactions');" +
 			"    var groupDesc = '';" +
 			"    if (recVal === 'all_records') groupDesc = 'all transactions and all entity/item records';" +
@@ -348,10 +348,10 @@ define([
 			"  function toggleDateFields() {" +
 			"    var mode = 'all'; var recType = ''; var sub = ''; var pmv = '';" +
 			"    var tf = ''; var tt = ''; var cf = ''; var ct = '';" +
-			"    try { mode = nlapiGetFieldValue('custpage_deletemode') || 'all'; } catch(e) {}" +
-			"    try { recType = nlapiGetFieldValue('custpage_delete_action') || ''; } catch(e) {}" +
+			"    try { mode = nlapiGetFieldValue('custpage_datefilter') || 'all'; } catch(e) {}" +
+			"    try { recType = nlapiGetFieldValue('custpage_recordtype') || ''; } catch(e) {}" +
 			"    try { sub = nlapiGetFieldValue('custpage_subsidiary') || ''; } catch(e) {}" +
-			"    try { pmv = nlapiGetFieldValue('custpage_pushmode') || ''; } catch(e) {}" +
+			"    try { pmv = nlapiGetFieldValue('custpage_externalid') || ''; } catch(e) {}" +
 			"    try { tf = nlapiGetFieldValue('custpage_trandatefrom') || ''; } catch(e) {}" +
 			"    try { tt = nlapiGetFieldValue('custpage_trandateto') || ''; } catch(e) {}" +
 			"    try { cf = nlapiGetFieldValue('custpage_createddatefrom') || ''; } catch(e) {}" +
@@ -362,21 +362,21 @@ define([
 			"    var isEntity = (recType === 'customer' || recType === 'vendor' || recType === 'employee' || recType === 'item' || recType === 'job' || recType === 'all_records' || recType === 'all_entities');" +
 			"    if (isEntity && hasTrandateOpt) {" +
 			"      try {" +
-			"        nlapiRemoveSelectOption('custpage_deletemode', 'trandate');" +
+			"        nlapiRemoveSelectOption('custpage_datefilter', 'trandate');" +
 			"        hasTrandateOpt = false;" +
 			"        if (mode === 'trandate') {" +
-			"          nlapiSetFieldValue('custpage_deletemode', 'createddate');" +
+			"          nlapiSetFieldValue('custpage_datefilter', 'createddate');" +
 			"          mode = 'createddate';" +
 			"        }" +
 			"      } catch(e) {}" +
 			"    } else if (!isEntity && !hasTrandateOpt && recType) {" +
 			"      try {" +
-			"        nlapiRemoveSelectOption('custpage_deletemode', null);" +
-			"        nlapiInsertSelectOption('custpage_deletemode', 'createddate', 'Created Date');" +
-			"        nlapiInsertSelectOption('custpage_deletemode', 'trandate', 'Transaction Date');" +
-			"        nlapiInsertSelectOption('custpage_deletemode', 'all', 'No Date Filter');" +
+			"        nlapiRemoveSelectOption('custpage_datefilter', null);" +
+			"        nlapiInsertSelectOption('custpage_datefilter', 'createddate', 'Created Date');" +
+			"        nlapiInsertSelectOption('custpage_datefilter', 'trandate', 'Transaction Date');" +
+			"        nlapiInsertSelectOption('custpage_datefilter', 'all', 'No Date Filter');" +
 			"        hasTrandateOpt = true;" +
-			"        nlapiSetFieldValue('custpage_deletemode', mode);" +
+			"        nlapiSetFieldValue('custpage_datefilter', mode);" +
 			"      } catch(e) {}" +
 			"    }" +
 			"    var layout = document.getElementById('custpage_date_layout');" +
@@ -399,9 +399,9 @@ define([
 			"  function updateSubmitButton() {" +
 			"    var sub='', rec='', pm='', mode='all', tt='', ct='';" +
 			"    try { sub = nlapiGetFieldValue('custpage_subsidiary') || ''; } catch(e) {}" +
-			"    try { rec = nlapiGetFieldValue('custpage_delete_action') || ''; } catch(e) {}" +
-			"    try { pm = nlapiGetFieldValue('custpage_pushmode') || ''; } catch(e) {}" +
-			"    try { mode = nlapiGetFieldValue('custpage_deletemode') || 'all'; } catch(e) {}" +
+			"    try { rec = nlapiGetFieldValue('custpage_recordtype') || ''; } catch(e) {}" +
+			"    try { pm = nlapiGetFieldValue('custpage_externalid') || ''; } catch(e) {}" +
+			"    try { mode = nlapiGetFieldValue('custpage_datefilter') || 'all'; } catch(e) {}" +
 			"    try { tt = nlapiGetFieldValue('custpage_trandateto') || ''; } catch(e) {}" +
 			"    try { ct = nlapiGetFieldValue('custpage_createddateto') || ''; } catch(e) {}" +
 			"    var ok = !!sub && !!rec && !!pm;" +
@@ -496,12 +496,12 @@ define([
 			"</script>";
 
 		// --- Row 1: Subsidiary ---
-		form.addFieldGroup({ id: "custpage_grp1", label: " " });
+		form.addFieldGroup({ id: "custpage_grp_subsidiary", label: " " });
 		var subsidiaryField = form.addField({
 			id: "custpage_subsidiary",
 			type: serverWidget.FieldType.SELECT,
 			label: "Subsidiary",
-			container: "custpage_grp1",
+			container: "custpage_grp_subsidiary",
 		});
 		subsidiaryField.isMandatory = true;
 		subsidiaryField.addSelectOption({
@@ -517,164 +517,164 @@ define([
 		});
 
 		// --- External ID (below Subsidiary) ---
-		form.addFieldGroup({ id: "custpage_grp_pushmode", label: " " });
-		var pushModeField = form.addField({
-			id: "custpage_pushmode",
+		form.addFieldGroup({ id: "custpage_grp_externalid", label: " " });
+		var externalIdField = form.addField({
+			id: "custpage_externalid",
 			type: serverWidget.FieldType.SELECT,
 			label: "External ID",
-			container: "custpage_grp_pushmode",
+			container: "custpage_grp_externalid",
 		});
-		pushModeField.isMandatory = true;
-		pushModeField.addSelectOption({
+		externalIdField.isMandatory = true;
+		externalIdField.addSelectOption({
 			value: "",
 			text: "-- Select External ID Criteria --",
 		});
-		pushModeField.addSelectOption({
+		externalIdField.addSelectOption({
 			value: "all",
 			text: "All records (Blank + All populated values)",
 		});
-		pushModeField.addSelectOption({
+		externalIdField.addSelectOption({
 			value: "populated",
 			text: "All populated values",
 		});
-		pushModeField.addSelectOption({
+		externalIdField.addSelectOption({
 			value: "blank",
 			text: "Blank",
 		});
-		pushModeField.addSelectOption({
+		externalIdField.addSelectOption({
 			value: "sm_match",
 			text: "All populated values that match SuiteMigration",
 		});
 
 		// --- Row 2: Record Type ---
-		form.addFieldGroup({ id: "custpage_grp2", label: " " });
-		var deleteActionField = form.addField({
-			id: "custpage_delete_action",
+		form.addFieldGroup({ id: "custpage_grp_recordtype", label: " " });
+		var recordTypeField = form.addField({
+			id: "custpage_recordtype",
 			type: serverWidget.FieldType.SELECT,
 			label: "Record Type",
-			container: "custpage_grp2",
+			container: "custpage_grp_recordtype",
 		});
-		deleteActionField.isMandatory = true;
-		deleteActionField.addSelectOption({
+		recordTypeField.isMandatory = true;
+		recordTypeField.addSelectOption({
 			value: "",
 			text: "-- Select Record Type --",
 		});
 		// --- Group Options ---
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "all_records",
 			text: "All Records",
 		});
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "all_entities",
 			text: "All Entities (Customers, Vendors, Employees, Items, Projects)",
 		});
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "all_transactions",
 			text: "All Transactions (including Journal Entries)",
 		});
 		// --- Individual Options ---
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "customer",
 			text: "Customers",
 		});
-		deleteActionField.addSelectOption({ value: "vendor", text: "Vendors" });
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({ value: "vendor", text: "Vendors" });
+		recordTypeField.addSelectOption({
 			value: "employee",
 			text: "Employees",
 		});
-		deleteActionField.addSelectOption({ value: "item", text: "Items" });
-		deleteActionField.addSelectOption({ value: "job", text: "Projects" });
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({ value: "item", text: "Items" });
+		recordTypeField.addSelectOption({ value: "job", text: "Projects" });
+		recordTypeField.addSelectOption({
 			value: "journalentry",
 			text: "Journal Entries",
 		});
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "journalentry_sm",
 			text: "Journal Entries matching SuiteMigration Trial Balance push",
 		});
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "invoice",
 			text: "Invoices",
 		});
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "customerpayment",
 			text: "Customer Payments",
 		});
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "creditmemo",
 			text: "Credit Memos",
 		});
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "vendorbill",
 			text: "Vendor Bills",
 		});
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "vendorpayment",
 			text: "Vendor Payments",
 		});
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "vendorcredit",
 			text: "Vendor Credits",
 		});
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "check",
 			text: "Checks",
 		});
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "deposit",
 			text: "Deposits",
 		});
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "cashsale",
 			text: "Cash Sales",
 		});
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "creditcardcharge",
 			text: "Credit Card Charges",
 		});
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "creditcardrefund",
 			text: "Credit Card Refunds",
 		});
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "purchaseorder",
 			text: "Purchase Orders",
 		});
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "cashrefund",
 			text: "Cash Refunds",
 		});
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "cashexpense",
 			text: "Cash Expenses",
 		});
-		deleteActionField.addSelectOption({
+		recordTypeField.addSelectOption({
 			value: "transfer",
 			text: "Transfers",
 		});
 
 		// --- Row 3: Date Filter ---
-		form.addFieldGroup({ id: "custpage_grp3", label: " " });
-		var deleteModeField = form.addField({
-			id: "custpage_deletemode",
+		form.addFieldGroup({ id: "custpage_grp_datefilter", label: " " });
+		var dateFilterField = form.addField({
+			id: "custpage_datefilter",
 			type: serverWidget.FieldType.SELECT,
 			label: "Date Filter",
-			container: "custpage_grp3",
+			container: "custpage_grp_datefilter",
 		});
-		deleteModeField.isMandatory = true;
-		deleteModeField.addSelectOption({
+		dateFilterField.isMandatory = true;
+		dateFilterField.addSelectOption({
 			value: "createddate",
 			text: "Created Date",
 		});
-		deleteModeField.addSelectOption({
+		dateFilterField.addSelectOption({
 			value: "trandate",
 			text: "Transaction Date",
 		});
-		deleteModeField.addSelectOption({
+		dateFilterField.addSelectOption({
 			value: "all",
 			text: "No Date Filter",
 		});
-		deleteModeField.defaultValue = "createddate";
+		dateFilterField.defaultValue = "createddate";
 
 		// --- Date Layout (custom rows for tighter spacing) ---
 		form.addFieldGroup({ id: "custpage_grp_dates_layout", label: " " });
@@ -749,10 +749,10 @@ define([
 	}
 
 	function handleSubmit(context) {
-		var recordType = context.request.parameters.custpage_delete_action;
+		var recordType = context.request.parameters.custpage_recordtype;
 		var subsidiaryId = context.request.parameters.custpage_subsidiary;
-		var pushMode = context.request.parameters.custpage_pushmode;
-		var deleteMode = context.request.parameters.custpage_deletemode;
+		var externalIdMode = context.request.parameters.custpage_externalid;
+		var dateFilter = context.request.parameters.custpage_datefilter;
 		var tranDateFrom = context.request.parameters.custpage_trandatefrom;
 		var tranDateTo = context.request.parameters.custpage_trandateto;
 		var createdDateFrom =
@@ -786,7 +786,7 @@ define([
 		var accResults = context.request.parameters.custpage_acc_results || "";
 
 		// Validate required fields (skip for chain requests — already validated)
-		if (!isChainRequest && (!recordType || !subsidiaryId || !pushMode || !deleteMode)) {
+		if (!isChainRequest && (!recordType || !subsidiaryId || !externalIdMode || !dateFilter)) {
 			context.response.write(
 				'<h3 style="color: red;">Please select a subsidiary, External ID option, record type, and date filter option.</h3>' +
 					'<p><a href="javascript:history.back()">Go Back</a></p>',
@@ -795,7 +795,7 @@ define([
 		}
 
 		// Validate Transaction Date To when Transaction Date is selected
-		if (deleteMode === "trandate" && !tranDateTo) {
+		if (dateFilter === "trandate" && !tranDateTo) {
 			context.response.write(
 				'<h3 style="color: red;">Please provide a Transaction Date To.</h3>' +
 					'<p><a href="javascript:history.back()">Go Back</a></p>',
@@ -804,7 +804,7 @@ define([
 		}
 
 		// Validate Creation Date To when Created Date is selected
-		if (deleteMode === "createddate" && !createdDateTo) {
+		if (dateFilter === "createddate" && !createdDateTo) {
 			context.response.write(
 				'<h3 style="color: red;">Please provide a Creation Date To.</h3>' +
 					'<p><a href="javascript:history.back()">Go Back</a></p>',
@@ -848,40 +848,40 @@ define([
 		];
 		var isCurrentTransaction =
 			TRANSACTION_TYPES.indexOf(currentType) !== -1;
-		var effectiveMode = deleteMode;
+		var effectiveDateFilter = dateFilter;
 		if (
-			deleteMode === "trandate" &&
+			dateFilter === "trandate" &&
 			!isCurrentTransaction &&
 			isChainRequest
 		) {
 			// Entity type in a chain — skip trandate, use createddate instead
-			effectiveMode = "createddate";
+			effectiveDateFilter = "createddate";
 		}
 
 		try {
 			var scriptTask = task.create({
 				taskType: task.TaskType.MAP_REDUCE,
 			});
-			scriptTask.scriptId = "customscript_delete1";
-			scriptTask.deploymentId = "customdeploy_delete2";
+			scriptTask.scriptId = "customscript_sm_toolkit_delete_mr";
+			scriptTask.deploymentId = "customdeploy_sm_toolkit_delete_mr";
 
 			var params = {
-				custscript_recordtype: currentType,
-				custscript_subsidiary: subsidiaryId,
-				custscript_pushmode: pushMode,
+				custscript_sm_recordtype: currentType,
+				custscript_sm_subsidiary: subsidiaryId,
+				custscript_sm_externalid: externalIdMode,
 			};
 
 			// Pass date params based on effective mode
-			if (effectiveMode === "trandate") {
+			if (effectiveDateFilter === "trandate") {
 				if (tranDateFrom) {
-					params.custscript_trandatefrom = tranDateFrom;
+					params.custscript_sm_trandate_from = tranDateFrom;
 				}
-				params.custscript_trandateto = tranDateTo;
-			} else if (effectiveMode === "createddate") {
+				params.custscript_sm_trandate_to = tranDateTo;
+			} else if (effectiveDateFilter === "createddate") {
 				if (createdDateFrom) {
-					params.custscript_createddatefrom = createdDateFrom;
+					params.custscript_sm_createddate_from = createdDateFrom;
 				}
-				params.custscript_createddateto = createdDateTo;
+				params.custscript_sm_createddate_to = createdDateTo;
 			}
 
 			scriptTask.params = params;
@@ -892,7 +892,7 @@ define([
 				"Task ID: " +
 					taskId +
 					", Mode: " +
-					deleteMode +
+					dateFilter +
 					", Record Type: " +
 					currentType +
 					(chainTotal
@@ -908,8 +908,8 @@ define([
 					total: chainTotal,
 					index: chainIndex,
 					completed: chainCompleted,
-					deleteMode: deleteMode,
-					pushMode: pushMode,
+					dateFilter: dateFilter,
+					externalIdMode: externalIdMode,
 					subsidiaryId: subsidiaryId,
 					tranDateFrom: tranDateFrom || "",
 					tranDateTo: tranDateTo || "",
@@ -1135,7 +1135,7 @@ define([
 				suiteletUrl +
 				'">';
 			chainFormHtml +=
-				'<input type="hidden" name="custpage_delete_action" value="' +
+				'<input type="hidden" name="custpage_recordtype" value="' +
 				nextType +
 				'">';
 			chainFormHtml +=
@@ -1143,12 +1143,12 @@ define([
 				chainInfo.subsidiaryId +
 				'">';
 			chainFormHtml +=
-				'<input type="hidden" name="custpage_pushmode" value="' +
-				chainInfo.pushMode +
+				'<input type="hidden" name="custpage_externalid" value="' +
+				chainInfo.externalIdMode +
 				'">';
 			chainFormHtml +=
-				'<input type="hidden" name="custpage_deletemode" value="' +
-				chainInfo.deleteMode +
+				'<input type="hidden" name="custpage_datefilter" value="' +
+				chainInfo.dateFilter +
 				'">';
 			chainFormHtml +=
 				'<input type="hidden" name="custpage_trandatefrom" value="' +
