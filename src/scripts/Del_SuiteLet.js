@@ -34,7 +34,8 @@ define([
 	"N/runtime",
 	"N/format",
 	"N/cache",
-], function (serverWidget, task, log, search, url, runtime, format, cache) {
+	"./SM_About",
+], function (serverWidget, task, log, search, url, runtime, format, cache, aboutContent) {
 	// Cache used to read back the final deleted/failed counts written by the
 	// Map/Reduce script, so we can display them when the job completes.
 	var RESULT_CACHE_NAME = "smAdminToolkit";
@@ -153,9 +154,21 @@ define([
 			datePlaceholder = "";
 		}
 
-		// --- Info text, CSS, and JS ---
+		// --- Tabs ---
+		form.addTab({
+			id: "custpage_tab_delete",
+			label: "Delete Records",
+		});
+		form.addTab({
+			id: "custpage_tab_about",
+			label: "About SuiteMigration",
+		});
+
+		// --- Page assets: CSS + client JS.
+		// Kept at form level (outside any tab) so the styles and scripts always
+		// load, regardless of which tab the user is viewing.
 		var filterField = form.addField({
-			id: "custpage_filter_info",
+			id: "custpage_page_assets",
 			type: serverWidget.FieldType.INLINEHTML,
 			label: " ",
 		});
@@ -193,26 +206,10 @@ define([
 			".sm-btn-cancel:hover { background:#e5e5e5; }" +
 			".sm-btn-delete { background:#e53935; color:#fff; }" +
 			".sm-btn-delete:hover { background:#d32f2f; }" +
+			".sm-help { width:1000px; max-width:100%; padding-top:16px; font-size:13px; line-height:1.55; }" +
+			"#custpage_filter_info, #custpage_filter_info_fs, #custpage_filter_info_val { width:auto !important; max-width:none !important; }" +
+			aboutContent.styles +
 			"</style>" +
-			"<b>Getting started:</b> Select a Subsidiary, External ID option, and Record Type, then choose a Date Filter. A confirmation summary appears for you to review before anything is deleted.<br>" +
-			"<ul style='margin:8px 0;padding-left:20px;line-height:1.5;'>" +
-			"<li><b>External ID</b> &mdash; which records to target, based on their External ID:" +
-			"<ul style='margin:4px 0;'>" +
-			"<li>All records (Blank + All populated values) &mdash; every record, whether it has an External ID or not.</li>" +
-			"<li>All populated values &mdash; records that have an External ID (any value).</li>" +
-			"<li>Blank &mdash; records with no External ID.</li>" +
-			"<li>All populated values that match SuiteMigration &mdash; records whose External ID matches the SuiteMigration format.</li>" +
-			"</ul></li>" +
-			"<li><b>Record Type</b> &mdash; a single record type, or a group option: All Records, All Entities (Customers, Vendors, Employees, Items, Projects), or All Transactions.</li>" +
-			"<li><b>Date Filter</b> &mdash; how records are matched by date:" +
-			"<ul style='margin:4px 0;'>" +
-			"<li>Created Date &mdash; filters by the date each record was created (all record types).</li>" +
-			"<li>Transaction Date &mdash; filters by transaction date (transactions only).</li>" +
-			"<li>No Date Filter &mdash; deletes every matching record.</li>" +
-			"</ul></li>" +
-			"<li>The From date is optional &mdash; leave it blank to delete everything up to and including the To date.</li>" +
-			"<li>All dates are inclusive &mdash; both the From and To dates fall within the deletion range.</li>" +
-			"</ul>" +
 			"<script>" +
 			"(function() {" +
 			"  var fieldIds = ['custpage_trandatefrom','custpage_trandateto','custpage_createddatefrom','custpage_createddateto'];" +
@@ -374,7 +371,7 @@ define([
 			"        nlapiRemoveSelectOption('custpage_datefilter', null);" +
 			"        nlapiInsertSelectOption('custpage_datefilter', 'createddate', 'Created Date');" +
 			"        nlapiInsertSelectOption('custpage_datefilter', 'trandate', 'Transaction Date');" +
-			"        nlapiInsertSelectOption('custpage_datefilter', 'all', 'No Date Filter');" +
+			"        nlapiInsertSelectOption('custpage_datefilter', 'all', 'All Dates');" +
 			"        hasTrandateOpt = true;" +
 			"        nlapiSetFieldValue('custpage_datefilter', mode);" +
 			"      } catch(e) {}" +
@@ -451,7 +448,50 @@ define([
 			"    var overlay = document.getElementById('smModalOverlay');" +
 			"    if (overlay) overlay.className = 'sm-modal-overlay';" +
 			"  }" +
+			// Hide the form buttons while the About tab is showing — they belong to
+			// the deletion form only. Visibility of a known Delete-tab field tells us
+			// which tab is active, without relying on NetSuite's tab markup.
+			"  function smToggleButtons() {" +
+			// Probe a visible element inside the Delete tab. Never probe
+			// custpage_* select ids — those are hidden value inputs and always
+			// report offsetParent === null. If the probe is missing, do nothing
+			// so the buttons stay visible.
+			"    var probe = document.querySelector('.sm-help');" +
+			"    if (!probe) return;" +
+			"    var onDeleteTab = probe.offsetParent !== null;" +
+			"    var ids = ['submitter', 'secondarysubmitter'];" +
+			"    for (var i = 0; i < ids.length; i++) {" +
+			"      var el = document.getElementById(ids[i]);" +
+			"      if (el) { el.style.display = onDeleteTab ? '' : 'none'; }" +
+			"    }" +
+			"  }" +
+			// NetSuite renders SELECT fields as a typeable input; make them read-only
+			// so the shown option text cannot be blanked with Backspace. The dropdown
+			// arrow and option picking still work normally.
+			"  function smLockSelects() {" +
+			"    var base = ['custpage_subsidiary','custpage_externalid','custpage_recordtype','custpage_datefilter'];" +
+			"    for (var i = 0; i < base.length; i++) {" +
+			"      var cands = [document.getElementById('inpt_' + base[i] + '1'), document.getElementById('inpt_' + base[i]), document.getElementById(base[i])];" +
+			"      for (var c = 0; c < cands.length; c++) {" +
+			"        try {" +
+			"          var el = cands[c];" +
+			"          if (el && el.tagName === 'INPUT' && el.type !== 'hidden' && !el.readOnly) {" +
+			"            el.readOnly = true;" +
+			"            el.setAttribute('autocomplete', 'off');" +
+			"            el.addEventListener('keydown', function(ev) {" +
+			"              var k = ev.key;" +
+			"              if (k === 'Backspace' || k === 'Delete') { ev.preventDefault(); }" +
+			"            });" +
+			"          }" +
+			"        } catch(e) {}" +
+			"      }" +
+			"    }" +
+			"  }" +
 			"  function smSetup() {" +
+			"    smToggleButtons();" +
+			"    smLockSelects();" +
+			"    var ov = document.getElementById('smModalOverlay');" +
+			"    if (ov && ov.parentNode !== document.body) { document.body.appendChild(ov); }" +
 			"    var c = document.getElementById('smCancelBtn');" +
 			"    var d = document.getElementById('smConfirmBtn');" +
 			"    if (c && !c.getAttribute('data-wired')) { c.setAttribute('data-wired','1'); c.addEventListener('click', function(){ smHideModal(); }); }" +
@@ -495,8 +535,46 @@ define([
 			"})();" +
 			"</script>";
 
+		// --- Instructions (Delete Records tab) ---
+		form.addFieldGroup({
+			id: "custpage_grp_info",
+			label: " ",
+			tab: "custpage_tab_delete",
+		});
+		var infoField = form.addField({
+			id: "custpage_filter_info",
+			type: serverWidget.FieldType.INLINEHTML,
+			label: " ",
+			container: "custpage_grp_info",
+		});
+		infoField.defaultValue =
+			'<div class="sm-help">' +
+			"<b>Getting started:</b> Select a Subsidiary, External ID option, and Record Type, then choose a Date Filter. A confirmation summary appears for you to review before anything is deleted.<br>" +
+			"<ul style='margin:8px 0;padding-left:20px;line-height:1.5;'>" +
+			"<li><b>External ID</b> &mdash; which records to target, based on their External ID:" +
+			"<ul style='margin:4px 0;'>" +
+			"<li>All records (Blank + All populated values) &mdash; every record, whether it has an External ID or not.</li>" +
+			"<li>All populated values &mdash; records that have an External ID (any value).</li>" +
+			"<li>Blank &mdash; records with no External ID.</li>" +
+			"<li>All populated values that match SuiteMigration &mdash; records whose External ID matches the SuiteMigration format.</li>" +
+			"</ul></li>" +
+			"<li><b>Record Type</b> &mdash; a single record type, or a group option: All Records, All Entities (Customers, Vendors, Employees, Items, Projects), or All Transactions.</li>" +
+			"<li><b>Date Filter</b> &mdash; how records are matched by date:" +
+			"<ul style='margin:4px 0;'>" +
+			"<li>Created Date &mdash; filters by the date each record was created (all record types).</li>" +
+			"<li>Transaction Date &mdash; filters by transaction date (transactions only).</li>" +
+			"<li>All Dates &mdash; no date filtering; deletes every matching record.</li>" +
+			"</ul></li>" +
+			"<li>The From date is optional &mdash; leave it blank to delete everything up to and including the To date.</li>" +
+			"<li>All dates are inclusive &mdash; both the From and To dates fall within the deletion range.</li>" +
+			"</ul></div>";
+
 		// --- Row 1: Subsidiary ---
-		form.addFieldGroup({ id: "custpage_grp_subsidiary", label: " " });
+		form.addFieldGroup({
+			id: "custpage_grp_subsidiary",
+			label: " ",
+			tab: "custpage_tab_delete",
+		});
 		var subsidiaryField = form.addField({
 			id: "custpage_subsidiary",
 			type: serverWidget.FieldType.SELECT,
@@ -517,7 +595,11 @@ define([
 		});
 
 		// --- External ID (below Subsidiary) ---
-		form.addFieldGroup({ id: "custpage_grp_externalid", label: " " });
+		form.addFieldGroup({
+			id: "custpage_grp_externalid",
+			label: " ",
+			tab: "custpage_tab_delete",
+		});
 		var externalIdField = form.addField({
 			id: "custpage_externalid",
 			type: serverWidget.FieldType.SELECT,
@@ -547,7 +629,11 @@ define([
 		});
 
 		// --- Row 2: Record Type ---
-		form.addFieldGroup({ id: "custpage_grp_recordtype", label: " " });
+		form.addFieldGroup({
+			id: "custpage_grp_recordtype",
+			label: " ",
+			tab: "custpage_tab_delete",
+		});
 		var recordTypeField = form.addField({
 			id: "custpage_recordtype",
 			type: serverWidget.FieldType.SELECT,
@@ -654,7 +740,11 @@ define([
 		});
 
 		// --- Row 3: Date Filter ---
-		form.addFieldGroup({ id: "custpage_grp_datefilter", label: " " });
+		form.addFieldGroup({
+			id: "custpage_grp_datefilter",
+			label: " ",
+			tab: "custpage_tab_delete",
+		});
 		var dateFilterField = form.addField({
 			id: "custpage_datefilter",
 			type: serverWidget.FieldType.SELECT,
@@ -672,12 +762,16 @@ define([
 		});
 		dateFilterField.addSelectOption({
 			value: "all",
-			text: "No Date Filter",
+			text: "All Dates",
 		});
 		dateFilterField.defaultValue = "createddate";
 
 		// --- Date Layout (custom rows for tighter spacing) ---
-		form.addFieldGroup({ id: "custpage_grp_dates_layout", label: " " });
+		form.addFieldGroup({
+			id: "custpage_grp_dates_layout",
+			label: " ",
+			tab: "custpage_tab_delete",
+		});
 		var dateLayoutField = form.addField({
 			id: "custpage_date_layout",
 			type: serverWidget.FieldType.INLINEHTML,
@@ -691,7 +785,11 @@ define([
 			"</div>";
 
 		// --- Date Fields (hidden group; moved into layout on load) ---
-		form.addFieldGroup({ id: "custpage_grp_dates_fields", label: " " });
+		form.addFieldGroup({
+			id: "custpage_grp_dates_fields",
+			label: " ",
+			tab: "custpage_tab_delete",
+		});
 		var tranDateFromField = form.addField({
 			id: "custpage_trandatefrom",
 			type: serverWidget.FieldType.DATE,
@@ -725,7 +823,11 @@ define([
 		});
 
 		// --- Confirmation Text ---
-		form.addFieldGroup({ id: "custpage_grp_confirm", label: " " });
+		form.addFieldGroup({
+			id: "custpage_grp_confirm",
+			label: " ",
+			tab: "custpage_tab_delete",
+		});
 		var confirmField = form.addField({
 			id: "custpage_confirmation",
 			type: serverWidget.FieldType.INLINEHTML,
@@ -743,6 +845,20 @@ define([
 			'<button type="button" id="smCancelBtn" class="sm-btn sm-btn-cancel">Cancel</button>' +
 			'<button type="button" id="smConfirmBtn" class="sm-btn sm-btn-delete">Delete Records</button>' +
 			"</div></div></div>";
+
+		// --- About tab (SuiteMigration + this toolkit) ---
+		form.addFieldGroup({
+			id: "custpage_grp_about",
+			label: " ",
+			tab: "custpage_tab_about",
+		});
+		var aboutField = form.addField({
+			id: "custpage_about",
+			type: serverWidget.FieldType.INLINEHTML,
+			label: " ",
+			container: "custpage_grp_about",
+		});
+		aboutField.defaultValue = aboutContent.html;
 
 		form.addSubmitButton({ label: "Preview Deletion" });
 		context.response.writePage(form);
