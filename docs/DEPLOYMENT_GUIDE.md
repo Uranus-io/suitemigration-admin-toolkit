@@ -24,9 +24,13 @@ The toolkit safely deletes NetSuite records in bulk using a background process. 
 
 1. Navigate to **Documents > Files > SuiteScripts**
 2. Click **Add File** and upload all three files into the **same folder**:
-   - `Del_SuiteLet.js`
-   - `Del_MapReduce.js`
-   - `SM_About.js`
+   - `Del_SuiteLet.js`   *(from `scripts/deletion/` in the repository)*
+   - `Del_MapReduce.js`  *(from `scripts/deletion/`)*
+   - `SM_About.js`       *(from `scripts/about/`)*
+
+> The repository groups these files into `deletion/` and `about/` subfolders for readability.
+> **Do not recreate those subfolders in NetSuite** — all three files must sit together in one
+> File Cabinet folder.
 
 > ⚠️ **All three files must be in the same File Cabinet folder.** `Del_SuiteLet.js` loads the
 > About content with the relative path `./SM_About` — if that file is missing or sits in a
