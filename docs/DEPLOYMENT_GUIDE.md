@@ -10,8 +10,8 @@ The toolkit safely deletes NetSuite records in bulk using a background process. 
 
 | Script | Type | Purpose |
 |--------|------|---------|
-| `Del_SuiteLet.js` | Suitelet | User interface — select subsidiary, External ID criteria, record type and date filter; preview and confirm; watch progress |
-| `Del_MapReduce.js` | Map/Reduce | Performs the bulk deletion asynchronously in the background |
+| `SuiteMigration_AdminToolkit_SuiteLet.js` | Suitelet | User interface — select subsidiary, External ID criteria, record type and date filter; preview and confirm; watch progress |
+| `SuiteMigration_AdminToolkit_MapReduce.js` | Map/Reduce | Performs the bulk deletion asynchronously in the background |
 
 **How they work together:** the Suitelet collects your selection, then submits a Map/Reduce task with 7 script parameters. The Map/Reduce builds a saved search from those parameters and deletes the matching records. The Suitelet polls the task status to show live progress and the final deleted/failed counts.
 
@@ -23,13 +23,13 @@ The toolkit safely deletes NetSuite records in bulk using a background process. 
 
 1. Navigate to **Documents > Files > SuiteScripts**
 2. Click **Add File** and upload both files:
-   - `Del_SuiteLet.js`
-   - `Del_MapReduce.js`
+   - `SuiteMigration_AdminToolkit_SuiteLet.js`
+   - `SuiteMigration_AdminToolkit_MapReduce.js`
 
 ## 3. Create the Map/Reduce Script
 
 1. Navigate to **Customization > Scripting > Scripts > New**
-2. Select the file `Del_MapReduce.js`
+2. Select the file `SuiteMigration_AdminToolkit_MapReduce.js`
 3. Click **Create Script Record**
 4. Enter:
    - **Name:** `SuiteMigration Admin Toolkit – Delete Records` *(or any preferred name)*
@@ -74,7 +74,7 @@ Click **Save**.
 ## 6. Create the Suitelet Script
 
 1. Navigate to **Customization > Scripting > Scripts > New**
-2. Select the file `Del_SuiteLet.js`
+2. Select the file `SuiteMigration_AdminToolkit_SuiteLet.js`
 3. Click **Create Script Record**
 4. Enter:
    - **Name:** `SuiteMigration Admin Toolkit` *(or any preferred name)*
