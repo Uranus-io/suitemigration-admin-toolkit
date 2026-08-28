@@ -12,7 +12,6 @@ The toolkit safely deletes NetSuite records in bulk using a background process. 
 |--------|------|---------|
 | `Del_SuiteLet.js` | Suitelet | User interface — select subsidiary, External ID criteria, record type and date filter; preview and confirm; watch progress |
 | `Del_MapReduce.js` | Map/Reduce | Performs the bulk deletion asynchronously in the background |
-| `SM_About.js` | Module | Content for the "About SuiteMigration" tab. Loaded by the Suitelet — no script record needed |
 
 **How they work together:** the Suitelet collects your selection, then submits a Map/Reduce task with 7 script parameters. The Map/Reduce builds a saved search from those parameters and deletes the matching records. The Suitelet polls the task status to show live progress and the final deleted/failed counts.
 
@@ -23,21 +22,9 @@ The toolkit safely deletes NetSuite records in bulk using a background process. 
 ## 2. Upload Script Files
 
 1. Navigate to **Documents > Files > SuiteScripts**
-2. Click **Add File** and upload all three files into the **same folder**:
-   - `Del_SuiteLet.js`   *(from `scripts/deletion/` in the repository)*
-   - `Del_MapReduce.js`  *(from `scripts/deletion/`)*
-   - `SM_About.js`       *(from `scripts/about/`)*
-
-> The repository groups these files into `deletion/` and `about/` subfolders for readability.
-> **Do not recreate those subfolders in NetSuite** — all three files must sit together in one
-> File Cabinet folder.
-
-> ⚠️ **All three files must be in the same File Cabinet folder.** `Del_SuiteLet.js` loads the
-> About content with the relative path `./SM_About` — if that file is missing or sits in a
-> different folder, the Suitelet will fail to load.
->
-> Only `Del_SuiteLet.js` and `Del_MapReduce.js` need script records. `SM_About.js` is a plain
-> module — upload it and nothing more.
+2. Click **Add File** and upload both files:
+   - `Del_SuiteLet.js`
+   - `Del_MapReduce.js`
 
 ## 3. Create the Map/Reduce Script
 
@@ -146,7 +133,7 @@ Choose a single record type, or a group option (see §9).
 |--------|-----------|
 | **Created Date** *(default)* | Filters by the date each record was created. Available for all record types |
 | **Transaction Date** | Filters by transaction date. Available for transaction types only |
-| **No Date Filter** | Deletes every matching record, with no date filtering |
+| **All Dates** | No date filtering; deletes every matching record |
 
 If a date range is selected:
 - The **To** date is **required**
