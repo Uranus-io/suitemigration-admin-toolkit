@@ -65,7 +65,7 @@ Click **Save**.
    - **Title:** `Delete Records Deployment` *(or any preferred title)*
    - **ID:** `_sm_toolkit_delete_mr` **(Mandatory — used in the code)**
    - **Log Level:** Debug
-   - **Status:** Released
+   - **Status:** Testing
    - **Execute As Role:** Administrator *(or an appropriate role)*
 4. Click **Save**
 
