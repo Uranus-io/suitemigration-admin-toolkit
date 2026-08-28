@@ -25,8 +25,8 @@ Built and published by [SuiteMigration](https://suitemigration.com).
 ├── docs/
 │   └── DEPLOYMENT_GUIDE.md    Setup instructions, script IDs and parameters
 └── scripts/
-    ├── Del_SuiteLet.js        Suitelet — the user interface
-    └── Del_MapReduce.js       Map/Reduce — performs the deletion
+    ├── SuiteMigration_AdminToolkit_SuiteLet.js    Suitelet — the user interface
+    └── SuiteMigration_AdminToolkit_MapReduce.js   Map/Reduce — performs the deletion
 ```
 
 ---

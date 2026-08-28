@@ -15,7 +15,7 @@
  * Suitelet to delete records by subsidiary and record type.
  * Triggers a Map/Reduce script to perform bulk deletion.
  *
- * This Suitelet calls the Map/Reduce script (Del_MapReduce.js).
+ * This Suitelet calls the Map/Reduce script (SuiteMigration_AdminToolkit_MapReduce.js).
  *
  * Required IDs for Map/Reduce (must match exactly):
  * - Script ID: customscript_sm_toolkit_delete_mr
