@@ -6,7 +6,8 @@
  * Name: SuiteMigration Admin Toolkit
  * Description: Automated bulk cleanup and data reset utility for NetSuite Admins & Consultants.
  * Publisher: SuiteMigration (https://suitemigration.com)
- * License: SuiteMigration Free Utility License (See LICENSE file or https://suitemigration.com/license)
+ * License: SuiteMigration Free Utility License
+ *          https://github.com/Uranus-io/suitemigration-admin-toolkit/blob/main/LICENSE
  *
  * Copyright (c) 2026 SuiteMigration. All rights reserved.
  * Provided "AS IS" without warranty of any kind.
