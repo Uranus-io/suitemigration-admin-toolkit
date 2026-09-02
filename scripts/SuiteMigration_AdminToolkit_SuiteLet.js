@@ -133,18 +133,18 @@ define([
 			html:
 				'<div class="sm-info-tab">' +
 				"<h2>Feature Requests</h2>" +
-				"<p>Have an idea for improving the SuiteMigration Admin Toolkit? We welcome suggestions and contributions from users and administrators.</p>" +
+				"<p>If you have a suggestion, improvement, or new feature for the SuiteMigration Admin Toolkit, you can submit it through GitHub or email.</p>" +
 				"<h3>GitHub</h3>" +
 				"<ul>" +
 				'<li><a href="' +
 				toolkitGithubUrl +
-				'" target="_blank" rel="noopener noreferrer"><b>Review the Toolkit:</b></a> Explore the repository, source code, and documentation.</li>' +
+				'" target="_blank" rel="noopener noreferrer"><b>Review the Toolkit:</b></a> View the repository, source code, and documentation.</li>' +
 				'<li><a href="' +
 				toolkitGithubUrl +
-				'/pulls" target="_blank" rel="noopener noreferrer"><b>Submit a Pull Request:</b></a> Propose improvements or changes directly through GitHub.</li>' +
+				'/pulls" target="_blank" rel="noopener noreferrer"><b>Submit a Pull Request:</b></a> Add proposed changes through GitHub.</li>' +
 				"</ul>" +
 				"<h3>Email</h3>" +
-				"<p>Feature requests can also be submitted to the SuiteMigration team by email:</p>" +
+				"<p>To submit a feature request by email, contact the SuiteMigration team at:</p>" +
 				"<p><b>" +
 				'<a href="mailto:' +
 				toolkitContactEmail +
@@ -158,7 +158,7 @@ define([
 			html:
 				'<div class="sm-info-tab">' +
 				"<h2>Support</h2>" +
-				"<p>For assistance with the SuiteMigration Admin Toolkit, please contact our support team.</p>" +
+				"<p>For help with setup, usage, or troubleshooting, contact SuiteMigration Support.</p>" +
 				"<p><b>Support:</b> " +
 				'<a href="mailto:' +
 				toolkitContactEmail +
