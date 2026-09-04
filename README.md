@@ -22,16 +22,22 @@ Built and published by [SuiteMigration](https://suitemigration.com).
 
 Select a subsidiary, an External ID option, a record type and a date filter:
 
-![The SuiteMigration Admin Toolkit main screen](docs/images/main-screen.png)
+<p align="center">
+  <img src="docs/images/main-screen.png" width="65%" alt="The SuiteMigration Admin Toolkit main screen">
+</p>
 
 Nothing is deleted until you confirm. The summary spells out exactly what will be
 removed:
 
-![The Confirm Deletion dialog](docs/images/confirm-deletion.png)
+<p align="center">
+  <img src="docs/images/confirm-deletion.png" width="65%" alt="The Confirm Deletion dialog">
+</p>
 
 Progress is reported as the deletion runs, with deleted and failed totals:
 
-![A completed deletion showing 17 customers deleted and 0 failed](docs/images/deletion-complete.png)
+<p align="center">
+  <img src="docs/images/deletion-complete.png" width="65%" alt="A completed deletion showing the total deleted and failed counts">
+</p>
 
 ---
 
