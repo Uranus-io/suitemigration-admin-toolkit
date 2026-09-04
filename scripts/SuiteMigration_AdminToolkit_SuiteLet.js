@@ -43,10 +43,10 @@ define([
 
 	// About tab content (styles + markup). Kept inline so the toolkit stays a
 	// single Suitelet file — fewer files to upload and upgrade in NetSuite.
-	var aboutContent = {
-		styles:
-			".sm-about { max-width:760px; padding:16px 2px 14px; font-size:13px; line-height:1.55; }" +
-			".sm-about h2 { margin:0 0 10px; font-size:20px; color:#2b3a4a; }" +
+		var aboutContent = {
+			styles:
+				".sm-about { max-width:760px; padding:16px 2px 14px; font-size:13px; line-height:1.55; }" +
+				".sm-about h2 { margin:0 0 10px; font-size:20px; color:#2b3a4a; }" +
 			".sm-about h3 { margin:20px 0 6px; font-size:15px; color:#2b3a4a; }" +
 			".sm-about p { margin:0 0 10px; }" +
 			".sm-about-tagline { font-size:15px; font-weight:600; margin:0 0 12px; }" +
@@ -112,12 +112,65 @@ define([
 			" &mdash; scripts, deployment guide and release notes</li>" +
 			'<li><a href="https://github.com/Uranus-io/suitemigration-admin-toolkit/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">SuiteMigration Free Utility License</a>' +
 			" &mdash; the licence terms this toolkit is provided under</li>" +
-			"</ul></div>",
-	};
+				"</ul></div>",
+		};
+
+		var toolkitContactEmail = "support@suitemigration.com";
+		var toolkitGithubUrl =
+			"https://github.com/Uranus-io/suitemigration-admin-toolkit";
+
+		var featureRequestsContent = {
+			styles:
+				".sm-info-tab { max-width:760px; padding:16px 2px 14px; font-size:13px; line-height:1.55; }" +
+				".sm-info-tab h2 { margin:0 0 10px; font-size:20px; color:#2b3a4a; }" +
+				".sm-info-tab h3 { margin:20px 0 6px; font-size:15px; color:#2b3a4a; }" +
+				".sm-info-tab p { margin:0 0 10px; }" +
+				".sm-info-tab ul { margin:6px 0; padding-left:20px; }" +
+				".sm-info-tab li { margin-bottom:7px; }" +
+				".sm-info-tab a { color:#1565c0; font-weight:600; text-decoration:none; }" +
+				".sm-info-tab a:hover { text-decoration:underline; }" +
+				"",
+			html:
+				'<div class="sm-info-tab">' +
+				"<h2>Feature Requests</h2>" +
+				"<p>If you have a suggestion, improvement, or new feature for the SuiteMigration Admin Toolkit, you can submit it through GitHub or email.</p>" +
+				"<h3>GitHub</h3>" +
+				"<ul>" +
+				'<li><a href="' +
+				toolkitGithubUrl +
+				'" target="_blank" rel="noopener noreferrer"><b>Review the Toolkit:</b></a> View the repository, source code, and documentation.</li>' +
+				'<li><a href="' +
+				toolkitGithubUrl +
+				'/pulls" target="_blank" rel="noopener noreferrer"><b>Submit a Pull Request:</b></a> Add proposed changes through GitHub.</li>' +
+				"</ul>" +
+				"<h3>Email</h3>" +
+				"<p>To submit a feature request by email, contact the SuiteMigration team at:</p>" +
+				"<p><b>" +
+				'<a href="mailto:' +
+				toolkitContactEmail +
+				'?subject=SuiteMigration%20Admin%20Toolkit%20Feature%20Request">' +
+				toolkitContactEmail +
+				"</a></b></p>" +
+				"</div>",
+		};
+
+		var supportContent = {
+			html:
+				'<div class="sm-info-tab">' +
+				"<h2>Support</h2>" +
+				"<p>For help with setup, usage, or troubleshooting, contact SuiteMigration Support.</p>" +
+				"<p><b>Support:</b> " +
+				'<a href="mailto:' +
+				toolkitContactEmail +
+				'?subject=SuiteMigration%20Admin%20Toolkit%20Support">' +
+				toolkitContactEmail +
+				"</a></p>" +
+				"</div>",
+		};
 
 
-	// Deletion order: payments/credits first, then invoices/bills, then JEs, then entities
-	var GROUP_TYPES = {
+		// Deletion order: payments/credits first, then invoices/bills, then JEs, then entities
+		var GROUP_TYPES = {
 		all_transactions: [
 			"deposit",
 			"customerpayment",
@@ -238,6 +291,14 @@ define([
 			id: "custpage_tab_about",
 			label: "About SuiteMigration",
 		});
+		form.addTab({
+			id: "custpage_tab_feature_requests",
+			label: "Feature Requests",
+		});
+		form.addTab({
+			id: "custpage_tab_support",
+			label: "Support",
+		});
 
 		// --- Page assets: CSS + client JS.
 		// Kept at form level (outside any tab) so the styles and scripts always
@@ -281,10 +342,11 @@ define([
 			".sm-btn-cancel:hover { background:#e5e5e5; }" +
 			".sm-btn-delete { background:#e53935; color:#fff; }" +
 			".sm-btn-delete:hover { background:#d32f2f; }" +
-			".sm-help { width:1000px; max-width:100%; padding-top:16px; font-size:13px; line-height:1.55; }" +
-			"#custpage_filter_info, #custpage_filter_info_fs, #custpage_filter_info_val { width:auto !important; max-width:none !important; }" +
-			aboutContent.styles +
-			"</style>" +
+				".sm-help { width:1000px; max-width:100%; padding-top:16px; font-size:13px; line-height:1.55; }" +
+				"#custpage_filter_info, #custpage_filter_info_fs, #custpage_filter_info_val { width:auto !important; max-width:none !important; }" +
+				aboutContent.styles +
+				featureRequestsContent.styles +
+				"</style>" +
 			"<script>" +
 			"(function() {" +
 			"  var fieldIds = ['custpage_trandatefrom','custpage_trandateto','custpage_createddatefrom','custpage_createddateto'];" +
@@ -934,6 +996,34 @@ define([
 			container: "custpage_grp_about",
 		});
 		aboutField.defaultValue = aboutContent.html;
+
+		// --- Feature Requests tab ---
+		form.addFieldGroup({
+			id: "custpage_grp_feature_requests",
+			label: " ",
+			tab: "custpage_tab_feature_requests",
+		});
+		var featureRequestsField = form.addField({
+			id: "custpage_feature_requests",
+			type: serverWidget.FieldType.INLINEHTML,
+			label: " ",
+			container: "custpage_grp_feature_requests",
+		});
+		featureRequestsField.defaultValue = featureRequestsContent.html;
+
+		// --- Support tab ---
+		form.addFieldGroup({
+			id: "custpage_grp_support",
+			label: " ",
+			tab: "custpage_tab_support",
+		});
+		var supportField = form.addField({
+			id: "custpage_support",
+			type: serverWidget.FieldType.INLINEHTML,
+			label: " ",
+			container: "custpage_grp_support",
+		});
+		supportField.defaultValue = supportContent.html;
 
 		form.addSubmitButton({ label: "Preview Deletion" });
 		context.response.writePage(form);
