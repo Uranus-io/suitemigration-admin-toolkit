@@ -1,39 +1,39 @@
 # SuiteMigration Admin Toolkit
 
-A free NetSuite utility for Administrators and Consultants that deletes records in bulk — useful when re-running a migration, clearing down a Sandbox, or removing test data from an account.
+A free NetSuite utility for administrators and consultants that deletes records in bulk. Handy when you are re-running a migration, clearing down a Sandbox, or getting test data out of an account.
 
 Built and published by [SuiteMigration](https://suitemigration.com).
 
-> ⚠️ **Deletions are permanent and cannot be undone.** Test in a Sandbox account before running in Production.
+> ⚠️ **Deletions are permanent and cannot be undone.** Test in a Sandbox account before you run this in Production.
 
 ---
 
 ## What it does
 
 - Delete by **subsidiary**, **record type** and **date range**
-- Target records by **External ID** — all, populated, blank, or matching the SuiteMigration format
-- Delete a single record type, or a group (**All Records**, **All Entities**, **All Transactions**)
-- **Preview before deleting** — a confirmation modal shows exactly what will be removed
-- **Live progress** — real record counts as they are deleted, with per-type deleted/failed totals
+- Target records by **External ID**: all, populated, blank, or matching the SuiteMigration format
+- Pick a single record type, or a group (**All Records**, **All Entities**, **All Transactions**) covering the 22 record types the toolkit supports
+- **Review before deleting.** A confirmation modal restates the subsidiary, record type, External ID option and date criteria the job will run with
+- **Live progress**, with record counts as the job works through them and per-type deleted and failed totals
 
 ---
 
 ## What it looks like
 
-Select a subsidiary, an External ID option, a record type and a date filter:
+Pick a subsidiary, an External ID option, a record type and a date filter:
 
 <p align="center">
   <img src="docs/images/main-screen.png" width="70%" alt="The SuiteMigration Admin Toolkit main screen">
 </p>
 
-Nothing is deleted until you confirm. The summary spells out exactly what will be
-removed:
+Nothing is deleted until you confirm. The modal restates the criteria the job
+will use:
 
 <p align="center">
   <img src="docs/images/confirm-deletion.png" width="70%" alt="The Confirm Deletion dialog">
 </p>
 
-Progress is reported as the deletion runs, with deleted and failed totals:
+Progress is reported while the deletion runs, with deleted and failed totals:
 
 <p align="center">
   <img src="docs/images/deletion-complete.png" width="70%" alt="A completed deletion showing the total deleted and failed counts">
@@ -43,37 +43,49 @@ Progress is reported as the deletion runs, with deleted and failed totals:
 
 ## How it compares
 
-A saved search finds records — it cannot delete them. NetSuite's native bulk
-delete is Mass Update, and its delete actions cover activities, cases, files,
-reports and web site redirects. There is no Mass Update that deletes
-transactions or entities.
+A saved search can identify the records, but the search on its own will not
+delete them. NetSuite's native bulk delete is Mass Update, and its delete
+actions cover activities, cases, files, reports and website redirects. For the
+transactions and entities this toolkit handles there is no native Mass Delete
+action, so removing them otherwise means deleting inline, record by record, or
+writing your own script.
 
 That is the gap this toolkit fills.
 
-| | Admin Toolkit | Saved Search + Mass Update |
+| | Admin Toolkit | Native NetSuite methods |
 |---|:---:|:---:|
 | Find records by subsidiary, date and External ID | ✅ | ✅ |
-| Review the list before anything is deleted | ✅ | ✅ |
-| Delete entities — customers, vendors, employees, items, projects | ✅ | ❌ |
-| Delete all 17 transaction types — invoices, credit memos, customer payments, vendor bills, vendor payments, purchase orders, cash sales, deposits, checks, transfers, journal entries and more | ✅ | ❌ |
-| All six item subtypes in one selection — inventory, non-inventory, service, assembly, kit and group | ✅ | ❌ |
-| Delete events, tasks, cases, files, reports | ❌ | ✅ |
-| Target only the records a SuiteMigration push created | ✅ | ❌ |
+| Review the criteria before anything is deleted | ✅ | ✅ |
+| Supports entity deletion (customers, vendors, employees, items, projects) | ✅ | ❌ |
+| Supports 17 transaction selections, including invoices, credit memos, customer payments, vendor bills, vendor payments, purchase orders, cash sales, deposits, checks, transfers and journal entries | ✅ | ❌ |
+| All six item subtypes in one selection (inventory, non-inventory, service, assembly, kit and group) | ✅ | ❌ |
+| Delete activities, cases, files, reports and website redirects | ❌ | ✅ |
+| Target records whose External IDs match SuiteMigration-generated formats | ✅ | ❌ |
 | Delete multiple record types in one run | ✅ | ❌ |
 | Deletion order handled for you | ✅ | ❌ |
-| Sub-customers and their contacts removed first, children before parents | ✅ | ❌ |
-| Live deleted/failed counts as it runs | ✅ | ❌ |
+| Sub-customers and their contacts processed first, children before parents | ✅ | ❌ |
+| Live deleted and failed counts as it runs | ✅ | ❌ |
 | Save the criteria and re-run them later | ❌ | ✅ |
 | No installation required | ❌ | ✅ |
 
-The two are complementary. For the entities and transactions a migration leaves
-behind, NetSuite offers no bulk option. For activities and files, use Mass
-Update — it is native and there is nothing to install.
+The two are complementary. For activities and files, stick with Mass Update,
+since it is native and there is nothing to install. The toolkit is for the
+entities and transactions a migration leaves behind.
 
 Deletion order is the other half of the problem. NetSuite will not delete a
-record that something else depends on — a customer with invoices, a bill with a
-payment against it — so records have to be removed in the right sequence. The
-toolkit clears all 22 record types in one pass, in dependency order.
+record that something else depends on, such as a customer with invoices against
+it, or a bill with a payment already applied. Records have to come out in the
+right sequence, so a group run works through the 22 supported types in
+dependency order.
+
+Some cleanups reach past the records your criteria matched. Deleting a customer
+also processes that customer's sub-customers and their contacts, deepest level
+first, so the number of records touched can exceed the count you started from.
+Read the deployment guide before you confirm a customer deletion.
+
+Individual deletions can still fail. Permissions, closed periods, workflows,
+other scripts and NetSuite's own validation can each block a record, which is
+why every run reports failed totals next to the deleted ones.
 
 ---
 
@@ -84,31 +96,36 @@ toolkit clears all 22 record types in one pass, in dependency order.
 ├── docs/
 │   └── DEPLOYMENT_GUIDE.md    Setup instructions, script IDs and parameters
 └── scripts/
-    ├── SuiteMigration_AdminToolkit_SuiteLet.js    Suitelet — the user interface
-    └── SuiteMigration_AdminToolkit_MapReduce.js   Map/Reduce — performs the deletion
+    ├── SuiteMigration_AdminToolkit_SuiteLet.js    Suitelet, the user interface
+    └── SuiteMigration_AdminToolkit_MapReduce.js   Map/Reduce, does the deleting
 ```
 
 ---
 
 ## Installation
 
-Upload both files from `scripts/` to the same File Cabinet folder
-(*Documents > Files > SuiteScripts*), then create the script records.
+Upload both files from `scripts/` into the same File Cabinet folder
+(`Documents > Files > SuiteScripts`), then create the script records.
 
-Full instructions, including the required script and parameter IDs:
-**[docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)**
+Full instructions, including the script and parameter IDs you will need:
+**[Read the deployment guide](docs/DEPLOYMENT_GUIDE.md)**
 
 ---
 
 ## Documentation
 
-**[Support article](https://support.suitemigration.com/deletion-scripts/)** — setup walkthrough
-on the SuiteMigration support site.
+The [support article](https://support.suitemigration.com/deletion-scripts/) on
+the SuiteMigration support site walks through the setup.
 
 ---
 
 ## Licence
 
-Provided under the **SuiteMigration Free Utility License** — see [LICENSE](LICENSE).
+Free and source available under the **SuiteMigration Free Utility License**. You
+may install, run, inspect and modify the scripts, either inside your own
+organisation or on behalf of clients during a consulting engagement. You may not
+redistribute, re-host, sub-license, white-label or republish the source, and you
+may not bundle it into a paid product or commercial service package. See
+[LICENSE](LICENSE) for the exact terms.
 
 Provided "AS IS" without warranty of any kind.
