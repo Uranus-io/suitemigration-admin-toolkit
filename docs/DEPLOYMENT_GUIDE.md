@@ -46,7 +46,7 @@ Go to the **Parameters** subtab and add all **7** parameters. All are **Free-For
 | # | Label *(any preferred name)* | ID **(Mandatory)** | Type | Purpose |
 |---|------------------------------|--------------------|------|---------|
 | 1 | Record Type | `_sm_recordtype` | Free-Form Text | Which record type to delete |
-| 2 | Subsidiary | `_sm_subsidiary` | Free-Form Text | Internal ID of the target subsidiary |
+| 2 | Subsidiary | `_sm_subsidiary` | Free-Form Text | Internal ID of the target subsidiary (left empty on non-OneWorld accounts) |
 | 3 | External ID | `_sm_externalid` | Free-Form Text | External ID criteria (`all` / `populated` / `blank` / `sm_match`) |
 | 4 | Transaction Date From | `_sm_trandate_from` | Free-Form Text | Optional start of transaction date range |
 | 5 | Transaction Date To | `_sm_trandate_to` | Free-Form Text | End of transaction date range |
@@ -112,8 +112,12 @@ The page has two tabs:
 
 ### On the Delete Records tab
 
-**Step 1 — Subsidiary** *(required)*
+**Step 1 — Subsidiary** *(required, OneWorld accounts only)*
 Select the target subsidiary. Only active subsidiaries are listed.
+
+Subsidiaries exist only on NetSuite OneWorld. On a standard account this field is
+not shown, is not required, and no subsidiary filter is applied — every other
+filter behaves exactly as described below.
 
 **Step 2 — External ID** *(required)* — which records to target, based on their External ID:
 
@@ -142,7 +146,7 @@ If a date range is selected:
 - Date fields show a format hint matching your account's date preference (e.g. `MM/DD/YYYY` or `DD/MM/YYYY`)
 
 **Step 5 — Preview Deletion**
-The **Preview Deletion** button stays greyed out until Subsidiary, External ID and Record Type are selected (and a To date, if a date range is chosen).
+The **Preview Deletion** button stays greyed out until Subsidiary (OneWorld only), External ID and Record Type are selected (and a To date, if a date range is chosen).
 
 Clicking it opens a **confirmation modal** showing exactly what will be deleted, with a permanent-action warning. Choose:
 - **Cancel** — closes the modal, nothing is deleted
@@ -213,7 +217,7 @@ For group options, the page additionally shows:
 Filters are combined with **AND** — a record is deleted only if it satisfies all applied conditions:
 
 ```
-Subsidiary                              (always applied)
+Subsidiary                              (OneWorld accounts only)
 AND  Date filter                        (if Created Date or Transaction Date is selected)
 AND  Record-type-specific condition     (only for the special types below)
 AND  External ID condition              (unless "All records" is selected)
@@ -288,7 +292,7 @@ These IDs are referenced in the code and **must match exactly**, or the tool wil
 | Symptom | Likely cause |
 |---------|--------------|
 | *"Script not found"* / task fails to submit | Map/Reduce **Script ID** or **Deployment ID** does not match the table in §11 |
-| *"Missing required parameters: record type or subsidiary"* | One or more script **parameter IDs** don't match §11, or parameters weren't saved on the script record |
+| *"Missing required parameters: record type or subsidiary"* | One or more script **parameter IDs** don't match §11, or parameters weren't saved on the script record. On OneWorld accounts this also appears if no subsidiary reached the Map/Reduce |
 | *"A delete task is already running"* | A previous Map/Reduce deployment is still processing — wait for it to finish |
 | Progress completes but no **Deleted / Failed** counts shown | The counts are passed via `N/cache`; the page falls back to a plain "Completed" message. Check the Map/Reduce execution log for the `Summary` audit entry |
 | Deletion returns 0 records | Check your filter combination — e.g. **Blank** External ID with Cash Expenses, Transfers or SM Trial Balance JEs correctly matches nothing (see §10) |

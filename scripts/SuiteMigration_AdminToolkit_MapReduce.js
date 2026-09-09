@@ -96,7 +96,19 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 			name: "custscript_sm_createddate_to",
 		});
 
-		if (!recordType || !subsidiaryId) {
+		// Subsidiary only exists on OneWorld accounts. Checking the feature here
+		// rather than treating an empty parameter as "no filter" keeps the guard
+		// intact where it matters: on OneWorld a missing subsidiary is still an
+		// error, so a dropped parameter can never silently widen a deletion to
+		// every subsidiary. On failure we assume OneWorld for the same reason.
+		var isOneWorld = true;
+		try {
+			isOneWorld = runtime.isFeatureInEffect({ feature: "SUBSIDIARIES" });
+		} catch (e) {
+			log.error("OneWorld feature check failed - assuming OneWorld", e);
+		}
+
+		if (!recordType || (isOneWorld && !subsidiaryId)) {
 			throw new Error(
 				"Missing required parameters: record type or subsidiary",
 			);
@@ -136,12 +148,15 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 				(createdDateTo || "N/A"),
 		);
 
-		// Build filters — always filter by subsidiary
-		var filters = [["subsidiary", "anyof", subsidiaryId]];
+		// Build filters — subsidiary only on OneWorld, where the field exists
+		var filters = [];
+		if (isOneWorld) {
+			filters.push(["subsidiary", "anyof", subsidiaryId]);
+		}
 
 		// Transaction Date filter — only applies to transaction record types
 		if (isTransaction && tranDateTo) {
-			filters.push("AND");
+			if (filters.length) { filters.push("AND"); }
 			if (tranDateFrom) {
 				filters.push(["trandate", "within", tranDateFrom, tranDateTo]);
 			} else {
@@ -153,7 +168,7 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 		// Uses "datecreated" for entities, "created" for items
 		if (createdDateTo) {
 			var createdField = isItem ? "created" : "datecreated";
-			filters.push("AND");
+			if (filters.length) { filters.push("AND"); }
 			if (createdDateFrom) {
 				filters.push([
 					createdField,
@@ -173,14 +188,14 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 		// Include only these records when deleting Trial Balance push JEs;
 		// exclude them when deleting regular journal entries.
 		if (isSmJE) {
-			filters.push("AND");
+			if (filters.length) { filters.push("AND"); }
 			filters.push([
 				"formulatext: CASE WHEN ({externalid} LIKE '%sm_net%' OR {externalid} LIKE '%sm_rebuild%' OR {externalid} LIKE '%sm_manual%') THEN '1' ELSE '0' END",
 				"is",
 				"1",
 			]);
 		} else if (recordType === "journalentry") {
-			filters.push("AND");
+			if (filters.length) { filters.push("AND"); }
 			filters.push([
 				"formulatext: CASE WHEN ({externalid} LIKE '%sm_net%' OR {externalid} LIKE '%sm_rebuild%' OR {externalid} LIKE '%sm_manual%') THEN '0' ELSE '1' END",
 				"is",
@@ -192,14 +207,14 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 		// Include only cex_chk_ records when deleting cash expenses;
 		// exclude them when deleting regular checks.
 		if (isCashExpense) {
-			filters.push("AND");
+			if (filters.length) { filters.push("AND"); }
 			filters.push([
 				"formulatext: CASE WHEN {externalid} LIKE '%__cex_chk' THEN '1' ELSE '0' END",
 				"is",
 				"1",
 			]);
 		} else if (recordType === "check") {
-			filters.push("AND");
+			if (filters.length) { filters.push("AND"); }
 			filters.push([
 				"formulatext: CASE WHEN {externalid} LIKE '%__cex_chk' THEN '0' ELSE '1' END",
 				"is",
@@ -211,14 +226,14 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 		// Include only trf_jrn_ records when deleting transfers;
 		// exclude them when deleting regular journal entries.
 		if (isTransfer) {
-			filters.push("AND");
+			if (filters.length) { filters.push("AND"); }
 			filters.push([
 				"formulatext: CASE WHEN {externalid} LIKE '%__trf_jrn' THEN '1' ELSE '0' END",
 				"is",
 				"1",
 			]);
 		} else if (recordType === "journalentry") {
-			filters.push("AND");
+			if (filters.length) { filters.push("AND"); }
 			filters.push([
 				"formulatext: CASE WHEN {externalid} LIKE '%__trf_jrn' THEN '0' ELSE '1' END",
 				"is",
@@ -235,21 +250,21 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 		//                  cmp_/txn_/itm_, plus JE-specific sm_net/sm_rebuild/sm_manual).
 		//                  If a new record type prefix is added to SM, update this list.
 		if (externalIdMode === "sm_match") {
-			filters.push("AND");
+			if (filters.length) { filters.push("AND"); }
 			filters.push([
 				"formulatext: CASE WHEN REGEXP_LIKE({externalid}, '.+__.+__(cmp|txn|itm)_') OR {externalid} LIKE 'sm_net%' OR {externalid} LIKE 'sm_rebuild%' OR {externalid} LIKE 'sm_manual%' THEN '1' ELSE '0' END",
 				"is",
 				"1",
 			]);
 		} else if (externalIdMode === "populated") {
-			filters.push("AND");
+			if (filters.length) { filters.push("AND"); }
 			filters.push([
 				"formulatext: CASE WHEN {externalid} IS NOT NULL THEN '1' ELSE '0' END",
 				"is",
 				"1",
 			]);
 		} else if (externalIdMode === "blank") {
-			filters.push("AND");
+			if (filters.length) { filters.push("AND"); }
 			filters.push([
 				"formulatext: CASE WHEN {externalid} IS NULL THEN '1' ELSE '0' END",
 				"is",
