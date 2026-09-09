@@ -135,7 +135,7 @@ One record type, or a group option. See §9.
 | **Transaction Date** | Filters by transaction date. Transaction types only |
 | **All Dates** | No date filtering. Deletes every matching record |
 
-Pick a date range and a few rules apply. The **To** date is required. The **From** date isn't, so leave it blank to delete everything up to and including the To date. Both ends are inclusive. The date fields show a format hint that follows your account's date preference, so you'll see either `MM/DD/YYYY` or `DD/MM/YYYY`.
+A few rules apply once you pick a date range. The **To** date is required. The **From** date isn't, so leave it blank to delete everything up to and including the To date. Both ends are inclusive. The date fields show a format hint that follows your account's date preference, so you'll see either `MM/DD/YYYY` or `DD/MM/YYYY`.
 
 **Step 5: Preview Deletion**
 The **Preview Deletion** button stays greyed out until you've chosen a Subsidiary, an External ID option and a Record Type, plus a To date if you picked a date range.
@@ -149,7 +149,7 @@ Group options add a bit more:
 
 - Which record type is being processed right now
 - A per-type list, each with its own deleted and failed counts and a status of Completed, Processing or Pending
-- Types with failures are highlighted, so you can trace a problem to the exact type
+- Failed counts turn red, so you can trace a problem to the exact type
 - Types run one at a time in dependency order, payments before invoices, transactions before entities
 
 ---
@@ -249,7 +249,7 @@ So that they don't overlap, the plain types exclude them:
 
 ### Cascade behaviour
 
-Deleting a **Customer** does more than delete that customer. It also removes the sub-customers beneath it and their contacts, working from the deepest level up, and clears vendor, employee and subsidiary relationships that would otherwise block the delete. The records actually removed can therefore outnumber the top-level count in the progress bar, so read this section before you confirm a customer deletion.
+Deleting a **Customer** takes its sub-customers and their contacts with it, working from the deepest level up. It also clears the vendor, employee and subsidiary relationships that would otherwise block the delete. So the records actually removed can outnumber the top-level count in the progress bar. Read this section before you confirm a customer deletion.
 
 **Items** are searched across all six item subtypes: Inventory, Non-Inventory, Service, Assembly, Kit and Group.
 
