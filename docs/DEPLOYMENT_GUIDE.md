@@ -46,7 +46,7 @@ Open the **Parameters** subtab and add all seven. Every one is **Free-Form Text*
 | # | Label *(any preferred name)* | ID **(Mandatory)** | Type | Purpose |
 |---|------------------------------|--------------------|------|---------|
 | 1 | Record Type | `_sm_recordtype` | Free-Form Text | Which record type to delete |
-| 2 | Subsidiary | `_sm_subsidiary` | Free-Form Text | Internal ID of the target subsidiary |
+| 2 | Subsidiary | `_sm_subsidiary` | Free-Form Text | Internal ID of the target subsidiary (left empty on non-OneWorld accounts) |
 | 3 | External ID | `_sm_externalid` | Free-Form Text | External ID criteria (`all` / `populated` / `blank` / `sm_match`) |
 | 4 | Transaction Date From | `_sm_trandate_from` | Free-Form Text | Optional start of transaction date range |
 | 5 | Transaction Date To | `_sm_trandate_to` | Free-Form Text | End of transaction date range |
@@ -111,8 +111,12 @@ You get two tabs:
 
 ### On the Delete Records tab
 
-**Step 1: Subsidiary** *(required)*
+**Step 1: Subsidiary** *(required on OneWorld accounts)*
 Pick the target subsidiary. Only active ones are listed.
+
+Subsidiaries only exist on NetSuite OneWorld. On a standard account the field
+isn't shown and isn't required, and no subsidiary filter gets applied. Every
+other filter works the same way.
 
 **Step 2: External ID** *(required)*
 This decides which records to target, based on their External ID.
@@ -138,7 +142,7 @@ One record type, or a group option. See §9.
 A few rules apply once you pick a date range. The **To** date is required. The **From** date isn't, so leave it blank to delete everything up to and including the To date. Both ends are inclusive. The date fields show a format hint that follows your account's date preference, so you'll see either `MM/DD/YYYY` or `DD/MM/YYYY`.
 
 **Step 5: Preview Deletion**
-The **Preview Deletion** button stays greyed out until you've chosen a Subsidiary, an External ID option and a Record Type, plus a To date if you picked a date range.
+The **Preview Deletion** button stays greyed out until you've chosen a Subsidiary (OneWorld only), an External ID option and a Record Type, plus a To date if you picked a date range.
 
 Clicking it opens a confirmation modal. The modal restates your criteria, the subsidiary, record type, External ID option and dates, and warns you that this cannot be undone. It doesn't list the individual records. From there, **Cancel** closes it and deletes nothing, **Delete Records** starts the job.
 
@@ -205,7 +209,7 @@ Group options add a bit more:
 Filters combine with **AND**, so a record has to satisfy every condition that applies before it's deleted:
 
 ```
-Subsidiary                              (always applied)
+Subsidiary                              (OneWorld accounts only)
 AND  Date filter                        (if Created Date or Transaction Date is selected)
 AND  Record-type-specific condition     (only for the special types below)
 AND  External ID condition              (unless "All records" is selected)
@@ -280,7 +284,7 @@ The code refers to these IDs directly. They **must match exactly** or the tool w
 | Symptom | Likely cause |
 |---------|--------------|
 | *"Script not found"*, or the task never submits | The Map/Reduce **Script ID** or **Deployment ID** doesn't match §11 |
-| *"Missing required parameters: record type or subsidiary"* | A script **parameter ID** doesn't match §11, or the parameters were never saved on the script record |
+| *"Missing required parameters: record type or subsidiary"* | A script **parameter ID** doesn't match §11, or the parameters were never saved on the script record. On a OneWorld account it also appears if no subsidiary reached the Map/Reduce |
 | *"A delete task is already running"* | An earlier Map/Reduce deployment is still going. Wait for it |
 | Progress finishes but no **Deleted / Failed** counts appear | The counts travel via `N/cache`, and the page fell back to a plain "Completed" message. The numbers are still in the Map/Reduce execution log, under the `Summary` audit entry |
 | Deletion returns 0 records | Check your filter combination. **Blank** External ID with Cash Expenses, Transfers or SM Trial Balance JEs matches nothing by design (see §10) |

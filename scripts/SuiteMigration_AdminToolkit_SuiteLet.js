@@ -262,6 +262,8 @@ define([
 			title: "SuiteMigration Admin Toolkit",
 		});
 
+		var isOneWorld = isOneWorldAccount();
+
 		// Build the date-field placeholder as a format pattern (e.g. DD/MM/YYYY
 		// or MM/DD/YYYY) that matches the account's date preference. We format a
 		// known date (31 Dec 2025) so the day/month/year are unambiguous, then
@@ -429,6 +431,12 @@ define([
 			"  }" +
 			"  var lastState = '';" +
 			"  var hasTrandateOpt = true;" +
+			// False on non-OneWorld accounts, where no Subsidiary field is rendered.
+			// Without this the Preview button would never enable, because the
+			// enable check waits on a field that does not exist.
+			"  var SM_HAS_SUB = " +
+			(isOneWorld ? "true" : "false") +
+			";" +
 			"  function updateConfirmation() {" +
 			"    var div = document.getElementById('custpage_confirmation_text');" +
 			"    if (!div) return;" +
@@ -437,7 +445,7 @@ define([
 			"    try { subVal = nlapiGetFieldValue('custpage_subsidiary') || ''; } catch(e) {}" +
 			"    try { recVal = nlapiGetFieldValue('custpage_recordtype') || ''; } catch(e) {}" +
 			"    try { pmVal = nlapiGetFieldValue('custpage_externalid') || ''; } catch(e) {}" +
-			"    if (!subVal || !recVal || !pmVal) { div.innerHTML = ''; return; }" +
+			"    if ((SM_HAS_SUB && !subVal) || !recVal || !pmVal) { div.innerHTML = ''; return; }" +
 			"    try { sub = nlapiGetFieldText('custpage_subsidiary') || ''; } catch(e) {}" +
 			"    try { rec = nlapiGetFieldText('custpage_recordtype') || ''; } catch(e) {}" +
 			"    try { pm = nlapiGetFieldText('custpage_externalid') || ''; } catch(e) {}" +
@@ -449,11 +457,15 @@ define([
 			"    else if (recVal === 'all_transactions') groupDesc = 'all transaction records (Deposits, Cash Refunds, Cash Sales, Invoices, Customer Payments, Credit Memos, Vendor Bills, Vendor Payments, Vendor Credits, Purchase Orders, Checks, Cash Expenses, Credit Card Charges, Credit Card Refunds, Transfers, Journal Entries)';" +
 			"    var msg = '';" +
 			"    var pmDesc = ' (<span class=\"custpage-confirm-value\">' + pm + '</span>)';" +
+			// On a non-OneWorld account there is no subsidiary to name, so both
+			// phrases collapse to nothing and the sentences still read correctly.
+			"    var inSub = SM_HAS_SUB ? (' in <span class=\"custpage-confirm-value\">' + sub + '</span> subsidiary') : '';" +
+			"    var thisSub = SM_HAS_SUB ? ' in this subsidiary' : '';" +
 			"    if (mode === 'all') {" +
 			"      if (isGroup) {" +
-			"        msg = '<b>Warning:</b> This will delete <span class=\"custpage-confirm-value\">' + groupDesc + '</span> in <span class=\"custpage-confirm-value\">' + sub + '</span> subsidiary' + pmDesc + '. No date filtering will be applied &mdash; every record of these types in this subsidiary will be deleted.';" +
+			"        msg = '<b>Warning:</b> This will delete <span class=\"custpage-confirm-value\">' + groupDesc + '</span>' + inSub + pmDesc + '. No date filtering will be applied &mdash; every record of these types' + thisSub + ' will be deleted.';" +
 			"      } else {" +
-			"        msg = '<b>Warning:</b> This will delete <span class=\"custpage-confirm-value\">ALL ' + rec + '</span> records in <span class=\"custpage-confirm-value\">' + sub + '</span> subsidiary' + pmDesc + '. No date filtering will be applied &mdash; every record of this type in this subsidiary will be deleted.';" +
+			"        msg = '<b>Warning:</b> This will delete <span class=\"custpage-confirm-value\">ALL ' + rec + '</span> records' + inSub + pmDesc + '. No date filtering will be applied &mdash; every record of this type' + thisSub + ' will be deleted.';" +
 			"      }" +
 			"    } else if (mode === 'trandate') {" +
 			"      var f = ''; var t = '';" +
@@ -461,9 +473,9 @@ define([
 			"      try { f = nlapiGetFieldValue('custpage_trandatefrom') || ''; } catch(e) {}" +
 			"      try { t = nlapiGetFieldValue('custpage_trandateto') || ''; } catch(e) {}" +
 			"      if (f && t) {" +
-			"        msg = 'This will delete <span class=\"custpage-confirm-value\">' + label + '</span> in <span class=\"custpage-confirm-value\">' + sub + '</span> subsidiary with transaction dates from <span class=\"custpage-confirm-value\">' + f + '</span> to <span class=\"custpage-confirm-value\">' + t + '</span>. Records outside this date range will not be deleted.';" +
+			"        msg = 'This will delete <span class=\"custpage-confirm-value\">' + label + '</span>' + inSub + ' with transaction dates from <span class=\"custpage-confirm-value\">' + f + '</span> to <span class=\"custpage-confirm-value\">' + t + '</span>. Records outside this date range will not be deleted.';" +
 			"      } else if (t) {" +
-			"        msg = 'This will delete <span class=\"custpage-confirm-value\">' + label + '</span> in <span class=\"custpage-confirm-value\">' + sub + '</span> subsidiary with transaction dates before and including <span class=\"custpage-confirm-value\">' + t + '</span>. All records with transaction dates after <span class=\"custpage-confirm-value\">' + t + '</span> will not be deleted.';" +
+			"        msg = 'This will delete <span class=\"custpage-confirm-value\">' + label + '</span>' + inSub + ' with transaction dates before and including <span class=\"custpage-confirm-value\">' + t + '</span>. All records with transaction dates after <span class=\"custpage-confirm-value\">' + t + '</span> will not be deleted.';" +
 			"      }" +
 			"    } else if (mode === 'createddate') {" +
 			"      var f = ''; var t = '';" +
@@ -471,9 +483,9 @@ define([
 			"      try { f = nlapiGetFieldValue('custpage_createddatefrom') || ''; } catch(e) {}" +
 			"      try { t = nlapiGetFieldValue('custpage_createddateto') || ''; } catch(e) {}" +
 			"      if (f && t) {" +
-			"        msg = 'This will delete <span class=\"custpage-confirm-value\">' + label + '</span> in <span class=\"custpage-confirm-value\">' + sub + '</span> subsidiary with creation dates from <span class=\"custpage-confirm-value\">' + f + '</span> to <span class=\"custpage-confirm-value\">' + t + '</span>. Records outside this date range will not be deleted.';" +
+			"        msg = 'This will delete <span class=\"custpage-confirm-value\">' + label + '</span>' + inSub + ' with creation dates from <span class=\"custpage-confirm-value\">' + f + '</span> to <span class=\"custpage-confirm-value\">' + t + '</span>. Records outside this date range will not be deleted.';" +
 			"      } else if (t) {" +
-			"        msg = 'This will delete <span class=\"custpage-confirm-value\">' + label + '</span> in <span class=\"custpage-confirm-value\">' + sub + '</span> subsidiary with creation dates before and including <span class=\"custpage-confirm-value\">' + t + '</span>. All records with creation dates after <span class=\"custpage-confirm-value\">' + t + '</span> will not be deleted.';" +
+			"        msg = 'This will delete <span class=\"custpage-confirm-value\">' + label + '</span>' + inSub + ' with creation dates before and including <span class=\"custpage-confirm-value\">' + t + '</span>. All records with creation dates after <span class=\"custpage-confirm-value\">' + t + '</span> will not be deleted.';" +
 			"      }" +
 			"    }" +
 			"    window.__smMsg = msg;" +
@@ -538,7 +550,7 @@ define([
 			"    try { mode = nlapiGetFieldValue('custpage_datefilter') || 'all'; } catch(e) {}" +
 			"    try { tt = nlapiGetFieldValue('custpage_trandateto') || ''; } catch(e) {}" +
 			"    try { ct = nlapiGetFieldValue('custpage_createddateto') || ''; } catch(e) {}" +
-			"    var ok = !!sub && !!rec && !!pm;" +
+			"    var ok = (!SM_HAS_SUB || !!sub) && !!rec && !!pm;" +
 			"    if (ok && mode === 'trandate') ok = !!tt;" +
 			"    if (ok && mode === 'createddate') ok = !!ct;" +
 			"    var btns = [];" +
@@ -686,7 +698,9 @@ define([
 		});
 		infoField.defaultValue =
 			'<div class="sm-help">' +
-			"<b>Getting started:</b> Select a Subsidiary, External ID option, and Record Type, then choose a Date Filter. A confirmation summary appears for you to review before anything is deleted.<br>" +
+			"<b>Getting started:</b> Select " +
+			(isOneWorld ? "a Subsidiary, an" : "an") +
+			" External ID option, and Record Type, then choose a Date Filter. A confirmation summary appears for you to review before anything is deleted.<br>" +
 			"<ul style='margin:8px 0;padding-left:20px;line-height:1.5;'>" +
 			"<li><b>External ID</b> &mdash; which records to target, based on their External ID:" +
 			"<ul style='margin:4px 0;'>" +
@@ -707,29 +721,32 @@ define([
 			"</ul></div>";
 
 		// --- Row 1: Subsidiary ---
-		form.addFieldGroup({
-			id: "custpage_grp_subsidiary",
-			label: " ",
-			tab: "custpage_tab_delete",
-		});
-		var subsidiaryField = form.addField({
-			id: "custpage_subsidiary",
-			type: serverWidget.FieldType.SELECT,
-			label: "Subsidiary",
-			container: "custpage_grp_subsidiary",
-		});
-		subsidiaryField.isMandatory = true;
-		subsidiaryField.addSelectOption({
-			value: "",
-			text: "-- Select Subsidiary --",
-		});
-		var subsidiaries = loadSubsidiaries();
-		subsidiaries.forEach(function (sub) {
-			subsidiaryField.addSelectOption({
-				value: sub.id,
-				text: sub.name,
+		// Non-OneWorld accounts have no subsidiaries at all, so the field is not
+		// created and nothing downstream asks for one.
+		if (isOneWorld) {
+			form.addFieldGroup({
+				id: "custpage_grp_subsidiary",
+				label: " ",
+				tab: "custpage_tab_delete",
 			});
-		});
+			var subsidiaryField = form.addField({
+				id: "custpage_subsidiary",
+				type: serverWidget.FieldType.SELECT,
+				label: "Subsidiary",
+				container: "custpage_grp_subsidiary",
+			});
+			subsidiaryField.isMandatory = true;
+			subsidiaryField.addSelectOption({
+				value: "",
+				text: "-- Select Subsidiary --",
+			});
+			loadSubsidiaries().forEach(function (sub) {
+				subsidiaryField.addSelectOption({
+					value: sub.id,
+					text: sub.name,
+				});
+			});
+		}
 
 		// --- External ID (below Subsidiary) ---
 		form.addFieldGroup({
@@ -1066,10 +1083,21 @@ define([
 		);
 		var accResults = context.request.parameters.custpage_acc_results || "";
 
+		// Subsidiary is only required — and only present — on OneWorld accounts.
+		var isOneWorld = isOneWorldAccount();
+
 		// Validate required fields (skip for chain requests — already validated)
-		if (!isChainRequest && (!recordType || !subsidiaryId || !externalIdMode || !dateFilter)) {
+		if (
+			!isChainRequest &&
+			(!recordType ||
+				(isOneWorld && !subsidiaryId) ||
+				!externalIdMode ||
+				!dateFilter)
+		) {
 			context.response.write(
-				'<h3 style="color: red;">Please select a subsidiary, External ID option, record type, and date filter option.</h3>' +
+				'<h3 style="color: red;">Please select ' +
+					(isOneWorld ? "a subsidiary, an" : "an") +
+					" External ID option, record type, and date filter option.</h3>" +
 					'<p><a href="javascript:history.back()">Go Back</a></p>',
 			);
 			return;
@@ -1148,7 +1176,7 @@ define([
 
 			var params = {
 				custscript_sm_recordtype: currentType,
-				custscript_sm_subsidiary: subsidiaryId,
+				custscript_sm_subsidiary: subsidiaryId || "",
 				custscript_sm_externalid: externalIdMode,
 			};
 
@@ -1421,7 +1449,7 @@ define([
 				'">';
 			chainFormHtml +=
 				'<input type="hidden" name="custpage_subsidiary" value="' +
-				chainInfo.subsidiaryId +
+				(chainInfo.subsidiaryId || "") +
 				'">';
 			chainFormHtml +=
 				'<input type="hidden" name="custpage_externalid" value="' +
@@ -1679,6 +1707,20 @@ define([
 			"</body></html>";
 
 		context.response.write(html);
+	}
+
+	// Subsidiary is a OneWorld-only concept. On a standard account no record has
+	// a subsidiary field, so filtering by it raises a search error rather than
+	// returning nothing. Every subsidiary-related behaviour hangs off this check.
+	// On failure we assume OneWorld: keeping the filter is the safe direction,
+	// since dropping it would widen a deletion to every subsidiary.
+	function isOneWorldAccount() {
+		try {
+			return runtime.isFeatureInEffect({ feature: "SUBSIDIARIES" });
+		} catch (e) {
+			log.error("OneWorld feature check failed - assuming OneWorld", e);
+			return true;
+		}
 	}
 
 	function loadSubsidiaries() {
