@@ -1,47 +1,47 @@
-# SuiteMigration Admin Toolkit — Deployment Guide
+# SuiteMigration Admin Toolkit: Deployment Guide
 
-Step-by-step instructions to deploy and use the SuiteMigration Admin Toolkit (bulk record deletion) in your NetSuite account.
+How to install the toolkit in your NetSuite account, and how to use it once it's in. Budget about fifteen minutes for setup if you've deployed NetSuite scripts before.
 
 ---
 
 ## 1. Overview
 
-The toolkit safely deletes NetSuite records in bulk using a background process. It consists of two scripts:
+Two scripts do the work.
 
 | Script | Type | Purpose |
 |--------|------|---------|
-| `SuiteMigration_AdminToolkit_SuiteLet.js` | Suitelet | User interface — select subsidiary, External ID criteria, record type and date filter; preview and confirm; watch progress |
-| `SuiteMigration_AdminToolkit_MapReduce.js` | Map/Reduce | Performs the bulk deletion asynchronously in the background |
+| `SuiteMigration_AdminToolkit_SuiteLet.js` | Suitelet | The user interface. Pick a subsidiary, External ID criteria, record type and date filter, confirm, then watch it run |
+| `SuiteMigration_AdminToolkit_MapReduce.js` | Map/Reduce | Does the deleting, in the background |
 
-**How they work together:** the Suitelet collects your selection, then submits a Map/Reduce task with 7 script parameters. The Map/Reduce builds a saved search from those parameters and deletes the matching records. The Suitelet polls the task status to show live progress and the final deleted/failed counts.
+The Suitelet takes what you selected and hands it to the Map/Reduce as seven script parameters. The Map/Reduce turns those into a saved search and deletes what it finds. While that happens the Suitelet polls the task status, which is how you get live progress and the deleted and failed counts at the end.
 
-> ⚠️ **Deletions are permanent and cannot be undone.** Test in a Sandbox account before running in Production.
+> ⚠️ **Deletions are permanent and cannot be undone.** Test in a Sandbox account before you run this in Production.
 
 ---
 
 ## 2. Upload Script Files
 
-1. Navigate to **Documents > Files > SuiteScripts**
-2. Click **Add File** and upload both files:
+1. Go to **Documents > Files > SuiteScripts**
+2. Click **Add File** and upload both:
    - `SuiteMigration_AdminToolkit_SuiteLet.js`
    - `SuiteMigration_AdminToolkit_MapReduce.js`
 
 ## 3. Create the Map/Reduce Script
 
-1. Navigate to **Customization > Scripting > Scripts > New**
-2. Select the file `SuiteMigration_AdminToolkit_MapReduce.js`
+1. Go to **Customization > Scripting > Scripts > New**
+2. Select `SuiteMigration_AdminToolkit_MapReduce.js`
 3. Click **Create Script Record**
-4. Enter:
-   - **Name:** `SuiteMigration Admin Toolkit – Delete Records` *(or any preferred name)*
-   - **ID:** `_sm_toolkit_delete_mr` **(Mandatory — used in the code)**
+4. Fill in:
+   - **Name:** `SuiteMigration Admin Toolkit - Delete Records`, or whatever you like
+   - **ID:** `_sm_toolkit_delete_mr`. **This one is mandatory.** The code looks for it by name
 
-> **Important:** Enter IDs **without** the `customscript_` / `custscript_` prefix. NetSuite adds it automatically.
+> **Watch out:** enter IDs **without** the `customscript_` or `custscript_` prefix. NetSuite adds that itself.
 
 ---
 
 ## 4. Add Script Parameters
 
-Go to the **Parameters** subtab and add all **7** parameters. All are **Free-Form Text**.
+Open the **Parameters** subtab and add all seven. Every one is **Free-Form Text**.
 
 | # | Label *(any preferred name)* | ID **(Mandatory)** | Type | Purpose |
 |---|------------------------------|--------------------|------|---------|
@@ -61,24 +61,24 @@ Click **Save**.
 
 1. Open the Map/Reduce script record
 2. Click **Deploy Script**
-3. Configure:
-   - **Title:** `Delete Records Deployment` *(or any preferred title)*
-   - **ID:** `_sm_toolkit_delete_mr` **(Mandatory — used in the code)**
+3. Set:
+   - **Title:** `Delete Records Deployment`, or anything
+   - **ID:** `_sm_toolkit_delete_mr`. **Mandatory**, same reason as above
    - **Log Level:** Debug
    - **Status:** Testing
-   - **Execute As Role:** Administrator *(or an appropriate role)*
+   - **Execute As Role:** Administrator, or another role that can delete these records
 4. Click **Save**
 
 ---
 
 ## 6. Create the Suitelet Script
 
-1. Navigate to **Customization > Scripting > Scripts > New**
-2. Select the file `SuiteMigration_AdminToolkit_SuiteLet.js`
+1. Go to **Customization > Scripting > Scripts > New**
+2. Select `SuiteMigration_AdminToolkit_SuiteLet.js`
 3. Click **Create Script Record**
-4. Enter:
-   - **Name:** `SuiteMigration Admin Toolkit` *(or any preferred name)*
-   - **ID:** `_sm_toolkit_suitelet` *(any preferred ID — not referenced in code)*
+4. Fill in:
+   - **Name:** `SuiteMigration Admin Toolkit`, or anything
+   - **ID:** `_sm_toolkit_suitelet`, or any ID you like. Nothing in the code refers to it
 5. Click **Save**
 
 ---
@@ -87,12 +87,12 @@ Click **Save**.
 
 1. Open the Suitelet script record
 2. Click **Deploy Script**
-3. Configure:
-   - **Title:** `SuiteMigration Admin Toolkit` *(or any preferred title)*
-   - **ID:** `_sm_toolkit_suitelet_deploy` *(any preferred ID)*
+3. Set:
+   - **Title:** `SuiteMigration Admin Toolkit`, or anything
+   - **ID:** `_sm_toolkit_suitelet_deploy`, or any ID
    - **Log Level:** Debug
    - **Status:** Released
-   - **Execute As Role:** Administrator *(or an appropriate role)*
+   - **Execute As Role:** Administrator, or another appropriate role
    - **Audience > Roles:** Administrator
 4. Click **Save**
 
@@ -100,10 +100,9 @@ Click **Save**.
 
 ## 8. Using the Toolkit
 
-1. Open the Suitelet deployment record
-2. Copy the **External URL** (or Internal URL) and open it in your browser
+Open the Suitelet deployment record, copy the **External URL** (the Internal URL works too), and open it in your browser.
 
-The page has two tabs:
+You get two tabs:
 
 | Tab | Contents |
 |-----|----------|
@@ -112,14 +111,15 @@ The page has two tabs:
 
 ### On the Delete Records tab
 
-**Step 1 — Subsidiary** *(required, OneWorld accounts only)*
-Select the target subsidiary. Only active subsidiaries are listed.
+**Step 1: Subsidiary** *(required on OneWorld accounts)*
+Pick the target subsidiary. Only active ones are listed.
 
-Subsidiaries exist only on NetSuite OneWorld. On a standard account this field is
-not shown, is not required, and no subsidiary filter is applied — every other
-filter behaves exactly as described below.
+Subsidiaries only exist on NetSuite OneWorld. On a standard account the field
+isn't shown and isn't required, and no subsidiary filter gets applied. Every
+other filter works the same way.
 
-**Step 2 — External ID** *(required)* — which records to target, based on their External ID:
+**Step 2: External ID** *(required)*
+This decides which records to target, based on their External ID.
 
 | Option | Deletes |
 |--------|---------|
@@ -128,41 +128,33 @@ filter behaves exactly as described below.
 | Blank | Records with no External ID |
 | All populated values that match SuiteMigration | Records whose External ID matches the SuiteMigration format |
 
-**Step 3 — Record Type** *(required)*
-Choose a single record type, or a group option (see §9).
+**Step 3: Record Type** *(required)*
+One record type, or a group option. See §9.
 
-**Step 4 — Date Filter** *(required)*
+**Step 4: Date Filter** *(required)*
 
 | Option | Behaviour |
 |--------|-----------|
-| **Created Date** *(default)* | Filters by the date each record was created. Available for all record types |
-| **Transaction Date** | Filters by transaction date. Available for transaction types only |
-| **All Dates** | No date filtering; deletes every matching record |
+| **Created Date** *(default)* | Filters by the date each record was created. Works for every record type |
+| **Transaction Date** | Filters by transaction date. Transaction types only |
+| **All Dates** | No date filtering. Deletes every matching record |
 
-If a date range is selected:
-- The **To** date is **required**
-- The **From** date is **optional** — leave it blank to delete everything up to and including the To date
-- All dates are **inclusive** — both From and To fall within the range
-- Date fields show a format hint matching your account's date preference (e.g. `MM/DD/YYYY` or `DD/MM/YYYY`)
+A few rules apply once you pick a date range. The **To** date is required. The **From** date isn't, so leave it blank to delete everything up to and including the To date. Both ends are inclusive. The date fields show a format hint that follows your account's date preference, so you'll see either `MM/DD/YYYY` or `DD/MM/YYYY`.
 
-**Step 5 — Preview Deletion**
-The **Preview Deletion** button stays greyed out until Subsidiary (OneWorld only), External ID and Record Type are selected (and a To date, if a date range is chosen).
+**Step 5: Preview Deletion**
+The **Preview Deletion** button stays greyed out until you've chosen a Subsidiary (OneWorld only), an External ID option and a Record Type, plus a To date if you picked a date range.
 
-Clicking it opens a **confirmation modal** showing exactly what will be deleted, with a permanent-action warning. Choose:
-- **Cancel** — closes the modal, nothing is deleted
-- **Delete Records** — starts the deletion
+Clicking it opens a confirmation modal. The modal restates your criteria, the subsidiary, record type, External ID option and dates, and warns you that this cannot be undone. It doesn't list the individual records. From there, **Cancel** closes it and deletes nothing, **Delete Records** starts the job.
 
-**Step 6 — Progress**
-The Map/Reduce runs in the background and the page shows live progress:
-- *"Scanning records…"* while the search runs
-- *"Deleting: 8,400 of 20,000 records"* with a percentage that reflects the **actual number of records processed**
-- On completion, a summary: **Total — Deleted: X · Failed: Y** (failures shown in red)
+**Step 6: Progress**
+The Map/Reduce runs in the background while the page reports on it. You'll see `Scanning records...` while the search runs, then `Deleting: 8,400 of 20,000 records` with a percentage based on how many records have actually been processed. When it finishes you get a summary line with the total deleted and the total failed, with failures in red.
 
-For group options, the page additionally shows:
-- The record type currently being processed
-- A per-type list with each type's own **Deleted / Failed** counts and status (Completed / Processing / Pending)
-- Types with failures are highlighted so issues can be traced to the exact record type
-- Types are processed one at a time in dependency order (payments before invoices, transactions before entities)
+Group options add a bit more:
+
+- Which record type is being processed right now
+- A per-type list, each with its own deleted and failed counts and a status of Completed, Processing or Pending
+- Failed counts turn red, so you can trace a problem to the exact type
+- Types run one at a time in dependency order, payments before invoices, transactions before entities
 
 ---
 
@@ -178,7 +170,7 @@ For group options, the page additionally shows:
 
 ### Individual record types
 
-**Entities** (Created Date filtering only — no transaction date):
+**Entities.** Created Date filtering only, there's no transaction date to filter on.
 
 | Label | Internal value |
 |-------|----------------|
@@ -188,7 +180,7 @@ For group options, the page additionally shows:
 | Items | `item` |
 | Projects | `job` |
 
-**Transactions** (support both Created Date and Transaction Date):
+**Transactions.** These support both Created Date and Transaction Date.
 
 | Label | Internal value |
 |-------|----------------|
@@ -214,7 +206,7 @@ For group options, the page additionally shows:
 
 ## 10. Record Selection Criteria
 
-Filters are combined with **AND** — a record is deleted only if it satisfies all applied conditions:
+Filters combine with **AND**, so a record has to satisfy every condition that applies before it's deleted:
 
 ```
 Subsidiary                              (OneWorld accounts only)
@@ -234,7 +226,7 @@ AND  External ID condition              (unless "All records" is selected)
 
 ### Special record types
 
-Three record types are not standard NetSuite record types — they are Checks or Journal Entries identified by a SuiteMigration External ID pattern:
+Three of the types in the dropdown aren't NetSuite record types at all. They're Checks or Journal Entries picked out by a SuiteMigration External ID pattern.
 
 | Toolkit record type | Stored in NetSuite as | Identified by External ID |
 |---------------------|-----------------------|---------------------------|
@@ -242,48 +234,48 @@ Three record types are not standard NetSuite record types — they are Checks or
 | Transfers | Journal Entry | ends with `__trf_jrn` |
 | Journal Entries matching SuiteMigration Trial Balance push | Journal Entry | contains `sm_net` / `sm_rebuild` / `sm_manual` |
 
-To keep them separate, the plain types explicitly exclude them:
+So that they don't overlap, the plain types exclude them:
 
 | Record type | Also excludes |
 |-------------|---------------|
 | Checks | External IDs ending `__cex_chk` |
 | Journal Entries | External IDs ending `__trf_jrn`, and those containing `sm_net` / `sm_rebuild` / `sm_manual` |
 
-> **Note:** because these three types are defined by having a SuiteMigration External ID, selecting **Blank** with them correctly returns **no records** — a record with no External ID cannot be one of them.
+> **Note:** these three types are defined by having a SuiteMigration External ID, so choosing **Blank** with any of them returns nothing. That's correct, not a bug. A record with no External ID can't be one of them.
 
 ### Date filtering details
 
-- Only one date range applies at a time, chosen via the **Date Filter** dropdown
-- **Transaction Date** applies to transaction types only. For entity types the option is unavailable; in a group deletion, entity types automatically fall back to **Created Date**
-- **Created Date** searches `datecreated` for entities and transactions, and `created` for items
-- The **From** date is optional; leave it blank to delete everything up to and including the **To** date
-- All dates are inclusive
+- Only one date range applies at a time, whichever you chose in the **Date Filter** dropdown
+- **Transaction Date** covers transaction types only. Entity types don't offer it, and in a group deletion they quietly fall back to **Created Date**
+- **Created Date** searches `datecreated` for entities and transactions, but `created` for items
+- The **From** date is optional. Leave it blank to delete everything up to and including the **To** date
+- Both ends of a range are inclusive
 
 ### Cascade behaviour
 
-Deleting a **Customer** also deletes its sub-customers and contacts, and clears vendor/employee/subsidiary relationships that would otherwise block deletion. The number of records actually removed can therefore exceed the top-level count shown in the progress bar.
+Deleting a **Customer** takes its sub-customers and their contacts with it, working from the deepest level up. It also clears the vendor, employee and subsidiary relationships that would otherwise block the delete. So the records actually removed can outnumber the top-level count in the progress bar. Read this section before you confirm a customer deletion.
 
-**Items** are searched across all item subtypes: Inventory, Non-Inventory, Service, Assembly, Kit and Group.
+**Items** are searched across all six item subtypes: Inventory, Non-Inventory, Service, Assembly, Kit and Group.
 
 ---
 
 ## 11. Required IDs Reference
 
-These IDs are referenced in the code and **must match exactly**, or the tool will fail.
+The code refers to these IDs directly. They **must match exactly** or the tool won't run.
 
 | Item | Enter in NetSuite | Final System ID |
 |------|-------------------|-----------------|
 | Map/Reduce Script | `_sm_toolkit_delete_mr` | `customscript_sm_toolkit_delete_mr` |
 | Map/Reduce Deployment | `_sm_toolkit_delete_mr` | `customdeploy_sm_toolkit_delete_mr` |
-| Parameter — Record Type | `_sm_recordtype` | `custscript_sm_recordtype` |
-| Parameter — Subsidiary | `_sm_subsidiary` | `custscript_sm_subsidiary` |
-| Parameter — External ID | `_sm_externalid` | `custscript_sm_externalid` |
-| Parameter — Transaction Date From | `_sm_trandate_from` | `custscript_sm_trandate_from` |
-| Parameter — Transaction Date To | `_sm_trandate_to` | `custscript_sm_trandate_to` |
-| Parameter — Created Date From | `_sm_createddate_from` | `custscript_sm_createddate_from` |
-| Parameter — Created Date To | `_sm_createddate_to` | `custscript_sm_createddate_to` |
+| Parameter, Record Type | `_sm_recordtype` | `custscript_sm_recordtype` |
+| Parameter, Subsidiary | `_sm_subsidiary` | `custscript_sm_subsidiary` |
+| Parameter, External ID | `_sm_externalid` | `custscript_sm_externalid` |
+| Parameter, Transaction Date From | `_sm_trandate_from` | `custscript_sm_trandate_from` |
+| Parameter, Transaction Date To | `_sm_trandate_to` | `custscript_sm_trandate_to` |
+| Parameter, Created Date From | `_sm_createddate_from` | `custscript_sm_createddate_from` |
+| Parameter, Created Date To | `_sm_createddate_to` | `custscript_sm_createddate_to` |
 
-> The Suitelet's own script and deployment IDs are **not** referenced in code — you may use any IDs for those.
+> The Suitelet's own script and deployment IDs are **not** in the code, so use whatever you want for those.
 
 ---
 
@@ -291,16 +283,16 @@ These IDs are referenced in the code and **must match exactly**, or the tool wil
 
 | Symptom | Likely cause |
 |---------|--------------|
-| *"Script not found"* / task fails to submit | Map/Reduce **Script ID** or **Deployment ID** does not match the table in §11 |
-| *"Missing required parameters: record type or subsidiary"* | One or more script **parameter IDs** don't match §11, or parameters weren't saved on the script record. On OneWorld accounts this also appears if no subsidiary reached the Map/Reduce |
-| *"A delete task is already running"* | A previous Map/Reduce deployment is still processing — wait for it to finish |
-| Progress completes but no **Deleted / Failed** counts shown | The counts are passed via `N/cache`; the page falls back to a plain "Completed" message. Check the Map/Reduce execution log for the `Summary` audit entry |
-| Deletion returns 0 records | Check your filter combination — e.g. **Blank** External ID with Cash Expenses, Transfers or SM Trial Balance JEs correctly matches nothing (see §10) |
-| Records fail to delete | Usually dependent records or references block deletion. Check the Map/Reduce execution log for `Delete Failed` entries |
+| *"Script not found"*, or the task never submits | The Map/Reduce **Script ID** or **Deployment ID** doesn't match §11 |
+| *"Missing required parameters: record type or subsidiary"* | A script **parameter ID** doesn't match §11, or the parameters were never saved on the script record. On a OneWorld account it also appears if no subsidiary reached the Map/Reduce |
+| *"A delete task is already running"* | An earlier Map/Reduce deployment is still going. Wait for it |
+| Progress finishes but no **Deleted / Failed** counts appear | The counts travel via `N/cache`, and the page fell back to a plain "Completed" message. The numbers are still in the Map/Reduce execution log, under the `Summary` audit entry |
+| Deletion returns 0 records | Check your filter combination. **Blank** External ID with Cash Expenses, Transfers or SM Trial Balance JEs matches nothing by design (see §10) |
+| Records fail to delete | Almost always a dependent record or reference blocking the delete. Look for `Delete Failed` entries in the Map/Reduce execution log |
 
 ### Modules used
 
-Both scripts use standard NetSuite modules only — no external dependencies:
+Both scripts stick to standard NetSuite modules. Nothing external.
 
 - **Suitelet:** `N/ui/serverWidget`, `N/task`, `N/log`, `N/search`, `N/url`, `N/runtime`, `N/format`, `N/cache`
 - **Map/Reduce:** `N/search`, `N/record`, `N/runtime`, `N/log`, `N/cache`
