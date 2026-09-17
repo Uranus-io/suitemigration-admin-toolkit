@@ -1,7 +1,7 @@
 /**
  * @NApiVersion 2.1
  * @NScriptType Suitelet
- * @version v1.0
+ * @version 1.0.0
  *
  * Name: SuiteMigration Admin Toolkit
  * Description: Automated bulk cleanup and data reset utility for NetSuite Admins & Consultants.
@@ -35,7 +35,18 @@ define([
 	"N/runtime",
 	"N/format",
 	"N/cache",
-], function (serverWidget, task, log, search, url, runtime, format, cache) {
+	"N/https",
+], function (
+	serverWidget,
+	task,
+	log,
+	search,
+	url,
+	runtime,
+	format,
+	cache,
+	https,
+) {
 	// Cache used to read back the final deleted/failed counts written by the
 	// Map/Reduce script, so we can display them when the job completes.
 	var RESULT_CACHE_NAME = "smAdminToolkit";
@@ -169,6 +180,333 @@ define([
 		};
 
 
+	// --- Update notifications -------------------------------------------------
+	// The toolkit runs inside each customer's own NetSuite account, so a release
+	// only reaches them if the installed script tells them it exists. On render
+	// we compare SCRIPT_VERSION against a manifest published with each release
+	// and pick an alert whose loudness matches how much the release matters.
+	//
+	// Bump SCRIPT_VERSION in this file and in the Map/Reduce script together,
+	// then tag the release and update the published manifest. See
+	// docs/RELEASE_PROCESS.md.
+	var SCRIPT_VERSION = "1.0.0";
+
+	// Manifest published alongside each release. Shape:
+	//   {
+	//     "latestVersion": "1.2.0",
+	//     "minimumVersion": "1.1.0",
+	//     "releaseUrl": "https://.../releases/latest",
+	//     "summary": "One line describing the release."
+	//   }
+	// minimumVersion is what lets us escalate a release after it has shipped:
+	// raise the floor and every account below it starts seeing the important
+	// alert, with nobody re-uploading a script.
+	// Served straight from the public repo, so publishing a manifest change is
+	// just merging version.json to main. No hosting to stand up and no deploy
+	// step that can be forgotten. Read from main (not a tag) so the manifest
+	// always reflects the newest published release.
+	var UPDATE_MANIFEST_URL =
+		"https://raw.githubusercontent.com/Uranus-io/suitemigration-admin-toolkit/main/version.json";
+
+	// Cached so we call out a couple of times a day per account rather than on
+	// every page load. NetSuite caps cache TTL at 24 hours.
+	var UPDATE_CACHE_NAME = "smAdminToolkitUpdates";
+	var UPDATE_CACHE_KEY = "versionManifest";
+	var UPDATE_CACHE_TTL_SECONDS = 21600; // 6 hours
+
+	// Alert levels, in ascending loudness.
+	var UPDATE_LEVEL_NONE = "none"; // nothing newer, or patch-only: stay quiet
+	var UPDATE_LEVEL_NOTICE = "notice"; // improvement: soft notice, Updates tab
+	var UPDATE_LEVEL_IMPORTANT = "important"; // below the floor: alert up front
+
+	/**
+	 * Escape text that came from the manifest before it goes into the page.
+	 * The manifest is ours, but it is still fetched over the network and we
+	 * render it as HTML.
+	 */
+	function escapeHtml(value) {
+		return String(value === null || value === undefined ? "" : value)
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			.replace(/'/g, "&#39;");
+	}
+
+	/**
+	 * Parse "1.2.3" (or "v1.2.3") into [1, 2, 3]. Missing trailing parts count
+	 * as zero, so "1.2" reads as 1.2.0. Returns null for anything we can't read,
+	 * which every caller treats as "say nothing".
+	 */
+	function parseVersion(value) {
+		if (!value || typeof value !== "string") {
+			return null;
+		}
+		var parts = value.replace(/^v/i, "").trim().split(".");
+		if (parts.length < 2) {
+			return null;
+		}
+		var numbers = [];
+		for (var i = 0; i < 3; i++) {
+			// Drop any pre-release suffix so "1.2.3-beta" still reads as 1.2.3.
+			var part = String(parts[i] === undefined ? "0" : parts[i]).split(
+				"-",
+			)[0];
+			if (!/^\d+$/.test(part)) {
+				return null;
+			}
+			numbers.push(parseInt(part, 10));
+		}
+		return numbers;
+	}
+
+	/** -1 when a is older than b, 0 when equal, 1 when a is newer. */
+	function compareVersions(a, b) {
+		for (var i = 0; i < 3; i++) {
+			if (a[i] < b[i]) {
+				return -1;
+			}
+			if (a[i] > b[i]) {
+				return 1;
+			}
+		}
+		return 0;
+	}
+
+	/**
+	 * Read the published manifest, cached per account. Returns the parsed
+	 * object, or null when the call failed, timed out, or came back as
+	 * something we can't parse. Every failure path here is deliberately silent:
+	 * a version check is never a reason to interrupt someone's deletion run.
+	 */
+	function fetchUpdateManifest() {
+		try {
+			var updateCache = cache.getCache({
+				name: UPDATE_CACHE_NAME,
+				scope: cache.Scope.PUBLIC,
+			});
+			// A failed call caches an empty string too, so an outage costs one
+			// callout per TTL window instead of one per page load.
+			var raw = updateCache.get({
+				key: UPDATE_CACHE_KEY,
+				loader: function () {
+					var response = https.get({ url: UPDATE_MANIFEST_URL });
+					if (!response || response.code !== 200) {
+						return "";
+					}
+					return response.body || "";
+				},
+				ttl: UPDATE_CACHE_TTL_SECONDS,
+			});
+			if (!raw) {
+				return null;
+			}
+			return JSON.parse(raw);
+		} catch (e) {
+			log.debug({
+				title: "Update check skipped",
+				details: e.message,
+			});
+			return null;
+		}
+	}
+
+	/**
+	 * Work out what, if anything, to tell the user about updates.
+	 * Returns { level, currentVersion, latestVersion, releaseUrl, summary,
+	 * checked } — `checked` is false when we couldn't reach the manifest, which
+	 * the Updates tab reports differently from "you are up to date".
+	 */
+	function getUpdateStatus() {
+		var status = {
+			level: UPDATE_LEVEL_NONE,
+			currentVersion: SCRIPT_VERSION,
+			latestVersion: null,
+			releaseUrl: toolkitGithubUrl + "/releases/latest",
+			summary: "",
+			checked: false,
+		};
+
+		// This runs on every render, so it must never be the reason the page
+		// fails to load. A broken version check costs an alert; a thrown error
+		// here would cost the admin the whole toolkit.
+		try {
+			var current = parseVersion(SCRIPT_VERSION);
+			if (!current) {
+				return status;
+			}
+
+			var manifest = fetchUpdateManifest();
+			if (!manifest) {
+				return status;
+			}
+
+			var latest = parseVersion(manifest.latestVersion);
+			if (!latest) {
+				return status;
+			}
+
+			status.checked = true;
+			status.latestVersion = manifest.latestVersion;
+			if (manifest.releaseUrl) {
+				status.releaseUrl = manifest.releaseUrl;
+			}
+			if (manifest.summary) {
+				status.summary = manifest.summary;
+			}
+
+			// Only speak up when the published release is genuinely ahead of
+			// us. An account running a newer build than the manifest — a
+			// pre-release or a local edit — is left alone rather than told to
+			// update backwards.
+			if (compareVersions(current, latest) >= 0) {
+				return status;
+			}
+
+			// Below the floor the publisher set: a security fix, or something
+			// we want everyone on.
+			var minimum = parseVersion(manifest.minimumVersion);
+			if (minimum && compareVersions(current, minimum) < 0) {
+				status.level = UPDATE_LEVEL_IMPORTANT;
+				return status;
+			}
+
+			// A patch-only gap (1.2.0 to 1.2.1) is a typo or a small tweak and
+			// is not worth interrupting anyone over. Anything larger earns the
+			// notice.
+			if (current[0] === latest[0] && current[1] === latest[1]) {
+				return status;
+			}
+
+			status.level = UPDATE_LEVEL_NOTICE;
+			return status;
+		} catch (e) {
+			log.debug({
+				title: "Update check skipped",
+				details: e.message,
+			});
+			// Discard anything half-assigned above so the caller can't render a
+			// partial alert built from a manifest we failed to read.
+			status.level = UPDATE_LEVEL_NONE;
+			status.checked = false;
+			return status;
+		}
+	}
+
+	// Styles for both alert levels. The important alert borrows the amber the
+	// toolkit already uses for destructive-action warnings; the soft notice is
+	// a muted yellow that reads as information rather than a warning.
+	var updateStyles =
+		".sm-update-alert { display:flex; gap:12px; align-items:flex-start; width:1000px; max-width:100%; box-sizing:border-box; margin:16px 0 0; padding:12px 16px; background:#fff4e5; border:1px solid #ffb74d; border-left:4px solid #ef6c00; border-radius:6px; font-size:13px; line-height:1.55; color:#5a3000; }" +
+		".sm-update-alert-icon { font-size:18px; line-height:1.3; color:#ef6c00; }" +
+		".sm-update-alert-title { font-weight:700; font-size:14px; margin-bottom:4px; }" +
+		".sm-update-alert p { margin:0 0 6px; }" +
+		".sm-update-alert p:last-child { margin-bottom:0; }" +
+		".sm-update-alert a { color:#b34700; font-weight:600; text-decoration:underline; }" +
+		".sm-update-notice { margin:4px 0 10px; padding:12px 14px; background:#fffbe6; border:1px solid #ece0a8; border-left:4px solid #c9a227; border-radius:6px; color:#5c4a00; }" +
+		".sm-update-notice-title { font-weight:700; margin-bottom:4px; }" +
+		".sm-update-notice p { margin:0; }" +
+		".sm-update-notice-important { background:#fff4e5; border-color:#ffb74d; border-left-color:#ef6c00; color:#5a3000; }" +
+		".sm-update-current { color:#4a5866; }" +
+		".sm-update-ok { color:#2e7d32; font-weight:600; }" +
+		".sm-update-unknown { color:#6b7684; }" +
+		"";
+
+	/**
+	 * The loud alert, shown at the top of the Delete Records tab when the
+	 * running version is below the floor set in the manifest. It is a notice,
+	 * not a gate: nothing on the page is blocked or disabled.
+	 */
+	function buildImportantAlertHtml(status) {
+		return (
+			'<div class="sm-update-alert">' +
+			'<span class="sm-update-alert-icon">&#9888;</span>' +
+			"<div>" +
+			'<div class="sm-update-alert-title">Update recommended &mdash; version ' +
+			escapeHtml(status.latestVersion) +
+			" is available</div>" +
+			"<p>You are running version " +
+			escapeHtml(status.currentVersion) +
+			". This release contains changes we recommend every account picks up." +
+			(status.summary ? " " + escapeHtml(status.summary) : "") +
+			"</p>" +
+			'<p><a href="' +
+			escapeHtml(status.releaseUrl) +
+			'" target="_blank" rel="noopener noreferrer">Get the latest version</a>' +
+			" &mdash; you can keep using the toolkit in the meantime.</p>" +
+			"</div></div>"
+		);
+	}
+
+	/**
+	 * Contents of the Updates tab. Always rendered, so there is one predictable
+	 * place to look up which version this account is on, whether or not there
+	 * is anything new to report.
+	 */
+	function buildUpdatesTabHtml(status) {
+		var html =
+			'<div class="sm-info-tab">' +
+			"<h2>Updates</h2>" +
+			'<p class="sm-update-current">Installed version: <b>' +
+			escapeHtml(status.currentVersion) +
+			"</b></p>";
+
+		if (status.level === UPDATE_LEVEL_NOTICE) {
+			html +=
+				'<div class="sm-update-notice">' +
+				'<div class="sm-update-notice-title">Version ' +
+				escapeHtml(status.latestVersion) +
+				" is available</div>" +
+				"<p>" +
+				(status.summary
+					? escapeHtml(status.summary)
+					: "This release adds improvements to the toolkit.") +
+				" Updating is optional &mdash; your current version keeps working.</p>" +
+				"</div>";
+		} else if (status.level === UPDATE_LEVEL_IMPORTANT) {
+			html +=
+				'<div class="sm-update-notice sm-update-notice-important">' +
+				'<div class="sm-update-notice-title">Version ' +
+				escapeHtml(status.latestVersion) +
+				" is available</div>" +
+				"<p>" +
+				(status.summary
+					? escapeHtml(status.summary)
+					: "This release contains changes we recommend every account picks up.") +
+				"</p>" +
+				"</div>";
+		} else if (status.checked) {
+			html +=
+				'<p class="sm-update-ok">You are on the latest version.</p>';
+		} else {
+			// The check is best-effort. Say so plainly rather than implying the
+			// account is up to date when we simply couldn't reach the manifest.
+			html +=
+				'<p class="sm-update-unknown">We couldn\'t check for updates just now. ' +
+				"You can see the current version on GitHub.</p>";
+		}
+
+		html +=
+			"<h3>How to update</h3>" +
+			"<p>Updating means replacing the two script files in your account with the " +
+			"latest copies. Your script and deployment records, parameters, and IDs stay " +
+			"as they are &mdash; only the file contents change. See the deployment guide " +
+			"for the steps.</p>" +
+			"<ul>" +
+			'<li><a href="' +
+			escapeHtml(status.releaseUrl) +
+			'" target="_blank" rel="noopener noreferrer">Latest release</a>' +
+			" &mdash; download the current scripts and read the release notes</li>" +
+			'<li><a href="' +
+			toolkitGithubUrl +
+			'/blob/main/docs/DEPLOYMENT_GUIDE.md" target="_blank" rel="noopener noreferrer">Deployment guide</a>' +
+			" &mdash; how to upload the updated files</li>" +
+			"</ul>" +
+			"</div>";
+
+		return html;
+	}
+
 		// Deletion order: payments/credits first, then invoices/bills, then JEs, then entities
 		var GROUP_TYPES = {
 		all_transactions: [
@@ -262,6 +600,10 @@ define([
 			title: "SuiteMigration Admin Toolkit",
 		});
 
+		// Resolved once per render and reused by the Delete Records banner and
+		// the Updates tab, so a page load makes at most one version check.
+		var updateStatus = getUpdateStatus();
+
 		var isOneWorld = isOneWorldAccount();
 
 		// Build the date-field placeholder as a format pattern (e.g. DD/MM/YYYY
@@ -300,6 +642,10 @@ define([
 		form.addTab({
 			id: "custpage_tab_support",
 			label: "Support",
+		});
+		form.addTab({
+			id: "custpage_tab_updates",
+			label: "Updates",
 		});
 
 		// --- Page assets: CSS + client JS.
@@ -348,6 +694,7 @@ define([
 				"#custpage_filter_info, #custpage_filter_info_fs, #custpage_filter_info_val { width:auto !important; max-width:none !important; }" +
 				aboutContent.styles +
 				featureRequestsContent.styles +
+				updateStyles +
 				"</style>" +
 			"<script>" +
 			"(function() {" +
@@ -683,6 +1030,25 @@ define([
 			"  }" +
 			"})();" +
 			"</script>";
+
+		// --- Update alert (Delete Records tab) ---
+		// Only rendered for the important level. Placed above the instructions
+		// so it is the first thing on the tab the page opens on.
+		if (updateStatus.level === UPDATE_LEVEL_IMPORTANT) {
+			form.addFieldGroup({
+				id: "custpage_grp_update_alert",
+				label: " ",
+				tab: "custpage_tab_delete",
+			});
+			var updateAlertField = form.addField({
+				id: "custpage_update_alert",
+				type: serverWidget.FieldType.INLINEHTML,
+				label: " ",
+				container: "custpage_grp_update_alert",
+			});
+			updateAlertField.defaultValue =
+				buildImportantAlertHtml(updateStatus);
+		}
 
 		// --- Instructions (Delete Records tab) ---
 		form.addFieldGroup({
@@ -1041,6 +1407,20 @@ define([
 			container: "custpage_grp_support",
 		});
 		supportField.defaultValue = supportContent.html;
+
+		// --- Updates tab ---
+		form.addFieldGroup({
+			id: "custpage_grp_updates",
+			label: " ",
+			tab: "custpage_tab_updates",
+		});
+		var updatesField = form.addField({
+			id: "custpage_updates",
+			type: serverWidget.FieldType.INLINEHTML,
+			label: " ",
+			container: "custpage_grp_updates",
+		});
+		updatesField.defaultValue = buildUpdatesTabHtml(updateStatus);
 
 		form.addSubmitButton({ label: "Preview Deletion" });
 		context.response.writePage(form);

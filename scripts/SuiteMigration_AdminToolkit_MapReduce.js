@@ -1,7 +1,7 @@
 /**
  * @NApiVersion 2.1
  * @NScriptType MapReduceScript
- * @version v1.0
+ * @version 1.0.0
  *
  * Name: SuiteMigration Admin Toolkit
  * Description: Automated bulk cleanup and data reset utility for NetSuite Admins & Consultants.
@@ -48,6 +48,12 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 	// for on-screen display. Shared (PUBLIC) so the Suitelet can read it.
 	var RESULT_CACHE_NAME = "smAdminToolkit";
 	var RESULT_CACHE_KEY = "lastDeleteResult";
+
+	// Toolkit version. The Suitelet is the script that checks for updates and
+	// shows the alerts; this constant exists so both files carry the same
+	// version and a mismatched pair is visible in the execution log. Bump the
+	// two together. See docs/RELEASE_PROCESS.md.
+	var SCRIPT_VERSION = "1.0.0";
 	/**
 	 * Transaction record types — these support "trandate" filtering.
 	 * Entity types (customer, vendor) and items do NOT have trandate.
@@ -130,7 +136,9 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 
 		log.audit(
 			"getInputData",
-			"Record Type: " +
+			"Toolkit Version: " +
+				SCRIPT_VERSION +
+				", Record Type: " +
 				recordType +
 				", Subsidiary: " +
 				subsidiaryId +
