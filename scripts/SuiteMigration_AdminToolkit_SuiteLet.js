@@ -397,16 +397,16 @@ define([
 	// toolkit already uses for destructive-action warnings; the soft notice is
 	// a muted yellow that reads as information rather than a warning.
 	var updateStyles =
-		".sm-update-alert { display:flex; gap:12px; align-items:flex-start; width:1000px; max-width:100%; box-sizing:border-box; margin:16px 0 0; padding:12px 16px; background:#fff4e5; border:1px solid #ffb74d; border-left:4px solid #ef6c00; border-radius:6px; font-size:13px; line-height:1.55; color:#5a3000; }" +
+		".sm-update-alert { display:flex; gap:12px; align-items:flex-start; width:1000px; max-width:100%; box-sizing:border-box; margin:16px 0 0; padding:12px 16px; background:#fff4e5; border:1px solid #ffb74d; border-radius:6px; font-size:13px; line-height:1.55; color:#5a3000; }" +
 		".sm-update-alert-icon { font-size:18px; line-height:1.3; color:#ef6c00; }" +
 		".sm-update-alert-title { font-weight:700; font-size:14px; margin-bottom:4px; }" +
 		".sm-update-alert p { margin:0 0 6px; }" +
 		".sm-update-alert p:last-child { margin-bottom:0; }" +
 		".sm-update-alert a { color:#b34700; font-weight:600; text-decoration:underline; }" +
-		".sm-update-notice { margin:4px 0 10px; padding:12px 14px; background:#fffbe6; border:1px solid #ece0a8; border-left:4px solid #c9a227; border-radius:6px; color:#5c4a00; }" +
+		".sm-update-notice { margin:4px 0 10px; padding:12px 14px; background:#fffbe6; border:1px solid #ece0a8; border-radius:6px; color:#5c4a00; }" +
 		".sm-update-notice-title { font-weight:700; margin-bottom:4px; }" +
 		".sm-update-notice p { margin:0; }" +
-		".sm-update-notice-important { background:#fff4e5; border-color:#ffb74d; border-left-color:#ef6c00; color:#5a3000; }" +
+		".sm-update-notice-important { background:#fff4e5; border-color:#ffb74d; color:#5a3000; }" +
 		".sm-update-current { color:#4a5866; }" +
 		".sm-update-ok { color:#2e7d32; font-weight:600; }" +
 		".sm-update-unknown { color:#6b7684; }" +
