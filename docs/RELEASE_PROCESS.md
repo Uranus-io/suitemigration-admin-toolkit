@@ -19,8 +19,11 @@ decides what installed copies of the toolkit show their users.
 | Minor (`1.0.0` to `1.1.0`) | New feature or improvement | Soft notice in the Updates tab |
 | Major (`1.0.0` to `2.0.0`) | Breaking change, new deployment steps | Soft notice in the Updates tab |
 
-Anything at or below `minimumVersion` in the manifest gets the loud alert on the
-Delete Records tab, whichever number changed.
+Anything **below** `minimumVersion` in the manifest gets the loud alert on the
+Delete Records tab, whichever number changed. Being exactly at it counts as fine,
+so `minimumVersion` is the lowest version you consider acceptable, not the highest
+one you consider broken. To put everyone on 1.1.0, set `minimumVersion` to
+`1.1.0`, not `1.0.0`.
 
 The version lives in two places and they must match:
 
@@ -44,7 +47,9 @@ running code reads the constant, not the comment.
 ```
 
 - `latestVersion`: the newest release. Installed copies below it may show a notice.
-- `minimumVersion`: the floor. Anything below it gets the important alert.
+- `minimumVersion`: the lowest version you consider acceptable. Anything below it
+  gets the important alert; an account exactly at it is treated as current. Set it
+  to the release you want everyone on.
 - `releaseUrl`: where the alert sends people.
 - `summary`: one line, shown in the alert. Keep it short; it renders inline.
 
