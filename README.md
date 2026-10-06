@@ -90,10 +90,12 @@ is why every run reports failed totals next to the deleted ones.
 ```
 .
 ├── docs/
-│   └── DEPLOYMENT_GUIDE.md    Setup instructions, script IDs and parameters
-└── scripts/
-    ├── SuiteMigration_AdminToolkit_SuiteLet.js    Suitelet, the user interface
-    └── SuiteMigration_AdminToolkit_MapReduce.js   Map/Reduce, does the deleting
+│   ├── DEPLOYMENT_GUIDE.md    Setup instructions, script IDs and parameters
+│   └── RELEASE_PROCESS.md     Versioning, tagging and the update manifest
+├── scripts/
+│   ├── SuiteMigration_AdminToolkit_SuiteLet.js    Suitelet, the user interface
+│   └── SuiteMigration_AdminToolkit_MapReduce.js   Map/Reduce, does the deleting
+└── version.json               Published manifest the installed toolkit checks
 ```
 
 ---
@@ -114,6 +116,11 @@ Full instructions, including those IDs:
 
 The [support article](https://support.suitemigration.com/deletion-scripts/) on
 the SuiteMigration support site walks through the setup.
+
+The toolkit checks for newer releases and shows an alert when one is available.
+The Updates tab in the Suitelet reports the installed version. If you maintain
+the toolkit, [the release process](docs/RELEASE_PROCESS.md) covers versioning,
+tagging and the manifest that drives those alerts.
 
 ---
 
