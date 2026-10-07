@@ -1,0 +1,171 @@
+# Tags and publishes a release whenever version.json names a version we have not
+# released yet.
+#
+# version.json is what tells installed toolkits that a newer version exists. The
+# release is where those toolkits send people to download it. Doing both by hand
+# meant they could fall out of step: update the manifest, forget the release, and
+# the update alert points at a download that is not there. Nobody reports that,
+# because an alert pointing nowhere looks the same as no alert.
+#
+# Making the manifest the trigger means the two cannot drift.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: ["version.json"]
+  # Lets you run it by hand, which is how to test it without pretending to ship.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# One release at a time. Two pushes in quick succession could otherwise both
+# decide a tag does not exist yet; the second would fail on push rather than
+# publish anything wrong, but queueing is cheaper than reading that failure.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Tags are needed to tell an already-released version from a new one.
+          fetch-depth: 0
+
+      - name: Read the manifest
+        id: manifest
+        run: |
+          set -euo pipefail
+
+          version=$(jq -r '.latestVersion // empty' version.json)
+          if [ -z "$version" ]; then
+            echo "::error file=version.json::latestVersion is missing or empty"
+            exit 1
+          fi
+
+          # A malformed version would create a tag nobody can predict, and the
+          # Suitelet could not parse it either, so stop rather than publish it.
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error file=version.json::latestVersion '$version' is not MAJOR.MINOR.PATCH"
+            exit 1
+          fi
+
+          # minimumVersion decides who sees the important alert. The Suitelet
+          # cannot parse a malformed value, and when it cannot it skips the
+          # important branch entirely: a one-character typo here quietly
+          # downgrades "everyone must update" to a soft notice in a tab, with
+          # no error anywhere. Catch it before it ships.
+          minimum=$(jq -r '.minimumVersion // empty' version.json)
+          if [ -z "$minimum" ]; then
+            echo "::error file=version.json::minimumVersion is missing or empty"
+            exit 1
+          fi
+          if ! printf '%s' "$minimum" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error file=version.json::minimumVersion '$minimum' is not MAJOR.MINOR.PATCH"
+            exit 1
+          fi
+
+          # A floor above the newest release cannot be satisfied by anyone: it
+          # would tell accounts to update to a version that is still below it.
+          if [ "$minimum" != "$version" ] && \
+             [ "$(printf '%s\n%s\n' "$version" "$minimum" | sort -V | head -1)" = "$version" ]; then
+            echo "::error file=version.json::minimumVersion '$minimum' is above latestVersion '$version'"
+            exit 1
+          fi
+
+          {
+            echo "version=$version"
+            echo "tag=v$version"
+          } >> "$GITHUB_OUTPUT"
+
+          # Multi-line safe: summary is free text written by a human.
+          {
+            echo "summary<<__EOF__"
+            jq -r '.summary // ""' version.json
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Skip if this version is already released
+        id: check
+        run: |
+          set -euo pipefail
+          tag="${{ steps.manifest.outputs.tag }}"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "$tag already exists, nothing to do."
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check the scripts agree with the manifest
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          set -euo pipefail
+          expected="${{ steps.manifest.outputs.version }}"
+          status=0
+
+          # Publishing scripts that still declare the old version would ship a
+          # release whose contents disagree with what it claims to be. Every
+          # account that installed it would then be told to update to a version
+          # it is already running.
+          for f in scripts/SuiteMigration_AdminToolkit_SuiteLet.js \
+                   scripts/SuiteMigration_AdminToolkit_MapReduce.js; do
+            actual=$(sed -n 's/.*SCRIPT_VERSION = "\([^"]*\)".*/\1/p' "$f" | head -1)
+            if [ "$actual" != "$expected" ]; then
+              echo "::error file=$f::SCRIPT_VERSION is '$actual' but version.json says '$expected'"
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: Tag and publish
+        if: steps.check.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.manifest.outputs.tag }}
+          SUMMARY: ${{ steps.manifest.outputs.summary }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "$TAG"
+
+          # Built in a file rather than inline: the notes are multi-line, and an
+          # unindented continuation line would end the YAML block above.
+          cat > "$RUNNER_TEMP/notes.md" <<NOTES
+          ${SUMMARY:-Maintenance release.}
+
+          To update, download both scripts below and replace them in your File Cabinet. Your script records, deployment records, parameters and IDs stay as they are.
+
+          Deployment guide: https://support.suitemigration.com/admin-toolkit/deletion-scripts/
+          NOTES
+
+          # Both scripts are attached so the page the update alert sends people
+          # to is one they can actually download from.
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            scripts/SuiteMigration_AdminToolkit_SuiteLet.js \
+            scripts/SuiteMigration_AdminToolkit_MapReduce.js
+
+      - name: Summary
+        if: always()
+        run: |
+          tag="${{ steps.manifest.outputs.tag }}"
+          needed="${{ steps.check.outputs.needed }}"
+          if [ -z "$tag" ]; then
+            # Step 1 rejected the manifest, so no version was ever resolved.
+            echo "version.json failed validation, nothing was released." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$needed" = "true" ]; then
+            echo "Published $tag" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$needed" = "false" ]; then
+            echo "$tag already released, nothing to do." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Run did not complete for $tag." >> "$GITHUB_STEP_SUMMARY"
+          fi
