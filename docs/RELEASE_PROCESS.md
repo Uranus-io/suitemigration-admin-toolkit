@@ -101,6 +101,31 @@ ships silently.
 If a release fails to publish, fix the cause and re-run the workflow. It looks for
 the release rather than the tag, so a retry picks up where it left off.
 
+## One setup step: make `validate` required
+
+`version.json` is served to installed toolkits from `main`, so merging it
+publishes the new version to customers straight away. The `validate` job exists to
+stop a broken release reaching that point, and it can only do that if GitHub
+refuses to merge a pull request where it failed.
+
+By default a failing check is information, not a rule: the pull request shows a red
+cross and can still be merged. Someone with admin on the repository has to add it:
+
+Settings, then Branches, then the protection rule for `main`, then "Require status
+checks to pass before merging", then add `validate`.
+
+GitHub only offers a check in that list once it has run at least once, so this has
+to happen after the workflow is merged.
+
+Until that setting exists, `validate` reports but does not block, and a bad
+manifest can still be merged and shipped.
+
+`validate` deliberately runs on every pull request, not only those touching
+`version.json`. A required check that gets skipped by a path filter never reports
+at all, and GitHub waits for it forever, so unrelated pull requests could not be
+merged. When no release is pending it reads the manifest, sees the version is
+already published, and exits.
+
 ## How the check behaves
 
 Worth knowing when you are deciding what to put in a release:

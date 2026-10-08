@@ -10,14 +10,21 @@
 # where they can still block the merge, and only tagging and publishing happen
 # after it.
 #
-# Make the "validate" job a required status check on main for this to bite.
+# Make the "validate" job a required status check on main for this to bite. It
+# runs on every pull request so that it can be required without stranding pull
+# requests that touch neither version.json nor the scripts.
 name: Release
 
 on:
+  # Deliberately unfiltered. validate is meant to be a required status check,
+  # and a required check that is skipped by a paths filter never reports at all:
+  # GitHub waits for it forever and the pull request cannot be merged. So it runs
+  # on every pull request and always reports. That is cheap, because when no
+  # release is pending it reads version.json, sees the version is already
+  # published, and exits.
   pull_request:
-    paths:
-      - "version.json"
-      - "scripts/**"
+  # Publishing is a different question, and skipping it is the right answer when
+  # version.json has not changed. Nothing is waiting on this one to report.
   push:
     branches: [main]
     paths: ["version.json"]
