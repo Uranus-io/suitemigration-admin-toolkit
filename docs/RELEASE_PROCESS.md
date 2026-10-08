@@ -74,30 +74,32 @@ to upload a new script for that to happen.
 
 ## Cutting a release
 
+Tagging and publishing are automated. You prepare the release in one pull request
+and merge it; `.github/workflows/release.yml` does the rest.
+
 1. Bump `SCRIPT_VERSION` in both scripts and `@version` in both headers.
-2. Update `version.json`. Set `latestVersion` always, and `minimumVersion` only if this
-   release is one everyone should be on.
-3. Merge to `main`.
-4. Tag and push:
+2. Update `version.json`:
+   - `latestVersion` to the new version, always.
+   - `minimumVersion` only if this release is one everyone should be on.
+   - `summary` to one line describing the release. It becomes the release notes
+     and appears in the alert, so it cannot be left blank.
+3. Open a pull request. The `validate` job checks the manifest, that both scripts
+   and both headers declare the same version, and that the summary is filled in.
+   It fails the pull request if any of that is wrong.
+4. Merge to `main`. The workflow creates the tag and the GitHub release with both
+   scripts attached.
 
-   ```bash
-   git tag -a v1.1.0 -m "v1.1.0"
-   git push origin v1.1.0
-   ```
+Do not create the tag or the release by hand. The workflow sees an existing
+release and decides there is nothing to publish, so a manual tag silently stops it.
 
-5. Create the GitHub release, attaching both script files:
+Step 2 is the one that makes any of it visible to customers. `version.json` is
+served from `main`, so merging publishes the new version immediately, which is why
+the checks run on the pull request rather than after the merge. Until it changes,
+installed copies keep reporting whatever it said before, so a release that skips it
+ships silently.
 
-   ```bash
-   gh release create v1.1.0 \
-     --title "v1.1.0" \
-     --notes "What changed, in plain terms." \
-     scripts/SuiteMigration_AdminToolkit_SuiteLet.js \
-     scripts/SuiteMigration_AdminToolkit_MapReduce.js
-   ```
-
-Step 2 is the one that makes any of it visible to customers. Until `version.json`
-on `main` changes, installed copies keep reporting whatever it said before, so a
-release that skips it ships silently.
+If a release fails to publish, fix the cause and re-run the workflow. It looks for
+the release rather than the tag, so a retry picks up where it left off.
 
 ## How the check behaves
 
