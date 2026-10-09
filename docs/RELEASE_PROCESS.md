@@ -74,30 +74,57 @@ to upload a new script for that to happen.
 
 ## Cutting a release
 
+Tagging and publishing are automated. You prepare the release in one pull request
+and merge it; `.github/workflows/release.yml` does the rest.
+
 1. Bump `SCRIPT_VERSION` in both scripts and `@version` in both headers.
-2. Update `version.json`. Set `latestVersion` always, and `minimumVersion` only if this
-   release is one everyone should be on.
-3. Merge to `main`.
-4. Tag and push:
+2. Update `version.json`:
+   - `latestVersion` to the new version, always.
+   - `minimumVersion` only if this release is one everyone should be on.
+   - `summary` to one line describing the release. It becomes the release notes
+     and appears in the alert, so it cannot be left blank.
+3. Open a pull request. The `validate` job checks the manifest, that both scripts
+   and both headers declare the same version, and that the summary is filled in.
+   It fails the pull request if any of that is wrong.
+4. Merge to `main`. The workflow creates the tag and the GitHub release with both
+   scripts attached.
 
-   ```bash
-   git tag -a v1.1.0 -m "v1.1.0"
-   git push origin v1.1.0
-   ```
+Do not create the tag or the release by hand. The workflow sees an existing
+release and decides there is nothing to publish, so a manual tag silently stops it.
 
-5. Create the GitHub release, attaching both script files:
+Step 2 is the one that makes any of it visible to customers. `version.json` is
+served from `main`, so merging publishes the new version immediately, which is why
+the checks run on the pull request rather than after the merge. Until it changes,
+installed copies keep reporting whatever it said before, so a release that skips it
+ships silently.
 
-   ```bash
-   gh release create v1.1.0 \
-     --title "v1.1.0" \
-     --notes "What changed, in plain terms." \
-     scripts/SuiteMigration_AdminToolkit_SuiteLet.js \
-     scripts/SuiteMigration_AdminToolkit_MapReduce.js
-   ```
+If a release fails to publish, fix the cause and re-run the workflow. It looks for
+the release rather than the tag, so a retry picks up where it left off.
 
-Step 2 is the one that makes any of it visible to customers. Until `version.json`
-on `main` changes, installed copies keep reporting whatever it said before, so a
-release that skips it ships silently.
+## One setup step: make `validate` required
+
+`version.json` is served to installed toolkits from `main`, so merging it
+publishes the new version to customers straight away. The `validate` job exists to
+stop a broken release reaching that point, and it can only do that if GitHub
+refuses to merge a pull request where it failed.
+
+By default a failing check is information, not a rule: the pull request shows a red
+cross and can still be merged. Someone with admin on the repository has to add it:
+
+Settings, then Branches, then the protection rule for `main`, then "Require status
+checks to pass before merging", then add `validate`.
+
+GitHub only offers a check in that list once it has run at least once, so this has
+to happen after the workflow is merged.
+
+Until that setting exists, `validate` reports but does not block, and a bad
+manifest can still be merged and shipped.
+
+`validate` deliberately runs on every pull request, not only those touching
+`version.json`. A required check that gets skipped by a path filter never reports
+at all, and GitHub waits for it forever, so unrelated pull requests could not be
+merged. When no release is pending it reads the manifest, sees the version is
+already published, and exits.
 
 ## How the check behaves
 
