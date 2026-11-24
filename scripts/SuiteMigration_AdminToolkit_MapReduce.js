@@ -54,6 +54,17 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 	// version and a mismatched pair is visible in the execution log. Bump the
 	// two together. See docs/RELEASE_PROCESS.md.
 	var SCRIPT_VERSION = "1.0.0";
+
+	// Journal entries linked to each other (for example by a $0 payment that
+	// NetSuite saved only as a link) can't be deleted while the other one still
+	// exists. Reduce deletes in parallel, so one of a linked pair can fail only
+	// because its partner hadn't been deleted yet. Reduce reports each JE that
+	// fails, and summarize retries them once the rest of the run is done. Only
+	// JEs this run selected are retried, and nothing is edited.
+	var JE_FAILED_KEY = "jeFailed";
+	// Governance units one retried journal entry delete needs.
+	var JE_RETRY_UNITS = 30;
+
 	/**
 	 * Transaction record types — these support "trandate" filtering.
 	 * Entity types (customer, vendor) and items do NOT have trandate.
@@ -401,6 +412,10 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 					failed: failedCount,
 				}),
 			});
+			// Summarize retries failed JEs once the rest of the run is done.
+			if (recordType === "journalentry") {
+				context.write({ key: JE_FAILED_KEY, value: String(recordId) });
+			}
 		}
 	}
 
@@ -527,9 +542,50 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 		}
 	}
 
+	/**
+	 * Retry deleting this run's failed journal entries, pass after pass while
+	 * each pass deletes at least one. Returns how many were deleted.
+	 */
+	function retryFailedJournals(failedIds) {
+		var remaining = failedIds.slice();
+		var deleted = 0;
+		var progress = true;
+		var outOfUnits = false;
+
+		while (remaining.length && progress && !outOfUnits) {
+			var stillFailing = [];
+			for (var i = 0; i < remaining.length; i++) {
+				if (runtime.getCurrentScript().getRemainingUsage() < JE_RETRY_UNITS) {
+					outOfUnits = true;
+					stillFailing = stillFailing.concat(remaining.slice(i));
+					break;
+				}
+				try {
+					record.delete({ type: record.Type.JOURNAL_ENTRY, id: remaining[i] });
+					deleted++;
+					log.audit("JE Retry Deleted", "ID: " + remaining[i]);
+				} catch (e) {
+					stillFailing.push(remaining[i]);
+				}
+			}
+			progress = stillFailing.length < remaining.length;
+			remaining = stillFailing;
+		}
+
+		if (outOfUnits) {
+			log.audit(
+				"JE Retry Stopped",
+				"Out of governance with " + remaining.length +
+					" failed journal entr(ies) not retried. Run the deletion again to finish them.",
+			);
+		}
+		return deleted;
+	}
+
 	function summarize(summary) {
 		var totalDeleted = 0;
 		var totalFailed = 0;
+		var failedJournalIds = [];
 
 		summary.output.iterator().each(function (key, value) {
 			if (key === "result") {
@@ -540,9 +596,15 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 				} catch (e) {
 					// Skip invalid data
 				}
+			} else if (key === JE_FAILED_KEY) {
+				failedJournalIds.push(String(value));
 			}
 			return true;
 		});
+
+		var retried = retryFailedJournals(failedJournalIds);
+		totalDeleted += retried;
+		totalFailed -= retried;
 
 		summary.mapSummary.errors.iterator().each(function (key, error) {
 			log.error("Map Error", error);
@@ -556,7 +618,12 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 
 		log.audit(
 			"Summary",
-			"Deleted: " + totalDeleted + ", Failed: " + totalFailed,
+			"Deleted: " +
+				totalDeleted +
+				", Failed: " +
+				totalFailed +
+				", Deleted on JE Retry: " +
+				retried,
 		);
 
 		// Publish the counts so the Suitelet can display them on completion.

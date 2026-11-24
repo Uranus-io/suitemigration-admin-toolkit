@@ -289,6 +289,7 @@ The code refers to these IDs directly. They **must match exactly** or the tool w
 | Progress finishes but no **Deleted / Failed** counts appear | The counts travel via `N/cache`, and the page fell back to a plain "Completed" message. The numbers are still in the Map/Reduce execution log, under the `Summary` audit entry |
 | Deletion returns 0 records | Check your filter combination. **Blank** External ID with Cash Expenses, Transfers or SM Trial Balance JEs matches nothing by design (see §10) |
 | Records fail to delete | Almost always a dependent record or reference blocking the delete. Look for `Delete Failed` entries in the Map/Reduce execution log |
+| A journal entry linked to another one still fails to delete | Journal entries that fail are retried once the rest of the run is done, so one whose linked partner was deleted in the same run goes through. `JE Retry Deleted` entries in the execution log show which ones. If one still fails, its partner usually isn't in your selection, so widen the filters to include it |
 
 ### Modules used
 
