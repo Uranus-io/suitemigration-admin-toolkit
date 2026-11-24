@@ -89,6 +89,17 @@ and merge it; `.github/workflows/release.yml` does the rest.
 4. Merge to `main`. The workflow creates the tag and the GitHub release with both
    scripts attached.
 
+If the release adds, removes or renames a Map/Reduce script parameter, also:
+
+- update `MR_PARAMETERS` in the Suitelet and `PARAMS` in the Map/Reduce. The
+  Suitelet checks every entry in `MR_PARAMETERS` exists on the customer's script
+  record and names any that don't, so a parameter left out of that list is a
+  parameter nobody is told to create;
+- add it to the tables in DEPLOYMENT_GUIDE.md §4 and §11;
+- treat it as at least a minor release and say in `summary` that a parameter
+  must be added by hand. Customers have to create it themselves; until they do,
+  the toolkit blocks deletion and shows which one is missing.
+
 Do not create the tag or the release by hand. The workflow sees an existing
 release and decides there is nothing to publish, so a manual tag silently stops it.
 

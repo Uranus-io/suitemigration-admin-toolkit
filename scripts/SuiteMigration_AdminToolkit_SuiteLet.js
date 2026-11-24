@@ -36,6 +36,7 @@ define([
 	"N/format",
 	"N/cache",
 	"N/https",
+	"N/record",
 ], function (
 	serverWidget,
 	task,
@@ -46,11 +47,31 @@ define([
 	format,
 	cache,
 	https,
+	record,
 ) {
 	// Cache used to read back the final deleted/failed counts written by the
 	// Map/Reduce script, so we can display them when the job completes.
 	var RESULT_CACHE_NAME = "smAdminToolkit";
 	var RESULT_CACHE_KEY = "lastDeleteResult";
+
+	// The Map/Reduce this Suitelet submits. The customer creates these records
+	// by hand, so the IDs must match DEPLOYMENT_GUIDE.md §11 exactly.
+	var MR_SCRIPT_ID = "customscript_sm_toolkit_delete_mr";
+	var MR_DEPLOYMENT_ID = "customdeploy_sm_toolkit_delete_mr";
+
+	// Every parameter the Map/Reduce reads. NetSuite cannot create these for the
+	// customer, so on load we check each one exists and name any that don't.
+	// When a release adds a parameter, add it here AND to the same list in the
+	// Map/Reduce script. Labels match DEPLOYMENT_GUIDE.md §4.
+	var MR_PARAMETERS = [
+		{ id: "custscript_sm_recordtype", label: "Record Type" },
+		{ id: "custscript_sm_subsidiary", label: "Subsidiary" },
+		{ id: "custscript_sm_externalid", label: "External ID" },
+		{ id: "custscript_sm_trandate_from", label: "Transaction Date From" },
+		{ id: "custscript_sm_trandate_to", label: "Transaction Date To" },
+		{ id: "custscript_sm_createddate_from", label: "Created Date From" },
+		{ id: "custscript_sm_createddate_to", label: "Created Date To" },
+	];
 
 	// About tab content (styles + markup). Kept inline so the toolkit stays a
 	// single Suitelet file — fewer files to upload and upgrade in NetSuite.
@@ -393,16 +414,24 @@ define([
 		}
 	}
 
-	// Styles for both alert levels. The important alert borrows the amber the
-	// toolkit already uses for destructive-action warnings; the soft notice is
-	// a muted yellow that reads as information rather than a warning.
+	// Styles for the shared alert banner (buildAlertHtml) and the Updates tab.
+	// The warning tone borrows the amber the toolkit already uses for
+	// destructive-action warnings; the error tone is for setup problems that
+	// stop deletion. The soft notice is a muted yellow that reads as
+	// information rather than a warning.
 	var updateStyles =
-		".sm-update-alert { display:flex; gap:12px; align-items:flex-start; width:1000px; max-width:100%; box-sizing:border-box; margin:16px 0 0; padding:12px 16px; background:#fff4e5; border:1px solid #ffb74d; border-radius:6px; font-size:13px; line-height:1.55; color:#5a3000; }" +
-		".sm-update-alert-icon { font-size:18px; line-height:1.3; color:#ef6c00; }" +
-		".sm-update-alert-title { font-weight:700; font-size:14px; margin-bottom:4px; }" +
-		".sm-update-alert p { margin:0 0 6px; }" +
-		".sm-update-alert p:last-child { margin-bottom:0; }" +
-		".sm-update-alert a { color:#b34700; font-weight:600; text-decoration:underline; }" +
+		".sm-alert { display:flex; gap:12px; align-items:flex-start; width:1000px; max-width:100%; box-sizing:border-box; margin:16px 0 0; padding:12px 16px; background:#fff4e5; border:1px solid #ffb74d; border-radius:6px; font-size:13px; line-height:1.55; color:#5a3000; }" +
+		".sm-alert-icon { font-size:18px; line-height:1.3; color:#ef6c00; }" +
+		".sm-alert-title { font-weight:700; font-size:14px; margin-bottom:4px; }" +
+		".sm-alert p { margin:0 0 6px; }" +
+		".sm-alert p:last-child { margin-bottom:0; }" +
+		".sm-alert ul { margin:0 0 6px; padding-left:20px; }" +
+		".sm-alert li { margin-bottom:2px; }" +
+		".sm-alert code { font-family:Menlo,Consolas,monospace; font-size:12px; background:rgba(0,0,0,0.06); padding:0 4px; border-radius:3px; }" +
+		".sm-alert a { color:#b34700; font-weight:600; text-decoration:underline; }" +
+		".sm-alert-error { background:#fdecea; border-color:#ef9a9a; color:#611a15; }" +
+		".sm-alert-error .sm-alert-icon { color:#d32f2f; }" +
+		".sm-alert-error a { color:#b71c1c; }" +
 		".sm-update-notice { margin:4px 0 10px; padding:12px 14px; background:#fffbe6; border:1px solid #ece0a8; border-radius:6px; color:#5c4a00; }" +
 		".sm-update-notice-title { font-weight:700; margin-bottom:4px; }" +
 		".sm-update-notice p { margin:0; }" +
@@ -413,29 +442,223 @@ define([
 		"";
 
 	/**
+	 * Shared alert banner, shown at the top of the Delete Records tab. Used by
+	 * the update alert (SM-1578) and the missing-parameter check, and meant for
+	 * any future alert that belongs there.
+	 *
+	 * opts:
+	 *   tone        "warning" (amber, default) or "error" (red)
+	 *   title       HTML for the bold first line
+	 *   paragraphs  array of HTML strings, rendered before the list
+	 *   items       array of HTML strings, rendered as a bulleted list
+	 *   footer      array of HTML strings, rendered after the list
+	 *
+	 * All values are inserted as HTML: callers must escapeHtml() anything that
+	 * did not come from this file.
+	 */
+	function buildAlertHtml(opts) {
+		var toPs = function (list) {
+			return (list || [])
+				.map(function (p) {
+					return "<p>" + p + "</p>";
+				})
+				.join("");
+		};
+		var items = opts.items || [];
+		return (
+			'<div class="sm-alert' +
+			(opts.tone === "error" ? " sm-alert-error" : "") +
+			'">' +
+			'<span class="sm-alert-icon">&#9888;</span>' +
+			"<div>" +
+			'<div class="sm-alert-title">' +
+			opts.title +
+			"</div>" +
+			toPs(opts.paragraphs) +
+			(items.length
+				? "<ul>" +
+					items
+						.map(function (item) {
+							return "<li>" + item + "</li>";
+						})
+						.join("") +
+					"</ul>"
+				: "") +
+			toPs(opts.footer) +
+			"</div></div>"
+		);
+	}
+
+	/**
 	 * The loud alert, shown at the top of the Delete Records tab when the
 	 * running version is below the floor set in the manifest. It is a notice,
 	 * not a gate: nothing on the page is blocked or disabled.
 	 */
 	function buildImportantAlertHtml(status) {
-		return (
-			'<div class="sm-update-alert">' +
-			'<span class="sm-update-alert-icon">&#9888;</span>' +
-			"<div>" +
-			'<div class="sm-update-alert-title">Update recommended &mdash; version ' +
-			escapeHtml(status.latestVersion) +
-			" is available</div>" +
-			"<p>You are running version " +
-			escapeHtml(status.currentVersion) +
-			". This release contains changes we recommend every account picks up." +
-			(status.summary ? " " + escapeHtml(status.summary) : "") +
-			"</p>" +
-			'<p><a href="' +
-			escapeHtml(status.releaseUrl) +
-			'" target="_blank" rel="noopener noreferrer">Get the latest version</a>' +
-			" &mdash; you can keep using the toolkit in the meantime.</p>" +
-			"</div></div>"
-		);
+		return buildAlertHtml({
+			tone: "warning",
+			title:
+				"Update recommended &mdash; version " +
+				escapeHtml(status.latestVersion) +
+				" is available",
+			paragraphs: [
+				"You are running version " +
+					escapeHtml(status.currentVersion) +
+					". This release contains changes we recommend every account picks up." +
+					(status.summary ? " " + escapeHtml(status.summary) : ""),
+				'<a href="' +
+					escapeHtml(status.releaseUrl) +
+					'" target="_blank" rel="noopener noreferrer">Get the latest version</a>' +
+					" &mdash; you can keep using the toolkit in the meantime.",
+			],
+		});
+	}
+
+	// --- Map/Reduce parameter check -------------------------------------------
+	// A parameter's runtime value can't tell "not defined on the script record"
+	// apart from "defined but empty": getParameter() returns null for both. So
+	// we read the definitions instead. Every parameter defined on a script
+	// appears as a field on each of its deployment records, so loading the
+	// deployment and asking for each field answers it directly: null means the
+	// parameter doesn't exist (or has a different ID), a field means it does,
+	// whatever its value.
+
+	/**
+	 * Check that every parameter in MR_PARAMETERS exists on the Map/Reduce.
+	 * Returns { checked, deploymentFound, missing: [{ id, label }] }.
+	 *
+	 * Like the update check, this must never break the page: any error (for
+	 * example a role without permission to view script deployments) is logged
+	 * and returns checked: false, which callers treat as "say nothing, block
+	 * nothing".
+	 */
+	function checkMapReduceParameters() {
+		var status = { checked: false, deploymentFound: false, missing: [] };
+		try {
+			var deploymentInternalId = null;
+			search
+				.create({
+					type: search.Type.SCRIPT_DEPLOYMENT,
+					filters: [["scriptid", "is", MR_DEPLOYMENT_ID]],
+					columns: ["internalid"],
+				})
+				.run()
+				.each(function (result) {
+					deploymentInternalId = result.id;
+					return false;
+				});
+
+			if (!deploymentInternalId) {
+				// Definitive: the deployment doesn't exist under this ID, so the
+				// task can't be submitted either. Reported, but not a parameter
+				// problem.
+				status.checked = true;
+				return status;
+			}
+			status.deploymentFound = true;
+
+			var deployment = record.load({
+				type: record.Type.SCRIPT_DEPLOYMENT,
+				id: deploymentInternalId,
+			});
+			MR_PARAMETERS.forEach(function (param) {
+				if (!deployment.getField({ fieldId: param.id })) {
+					status.missing.push(param);
+				}
+			});
+			status.checked = true;
+
+			if (status.missing.length) {
+				log.audit(
+					"Map/Reduce parameters missing",
+					status.missing
+						.map(function (p) {
+							return p.id;
+						})
+						.join(", "),
+				);
+			}
+		} catch (e) {
+			log.error("Map/Reduce parameter check skipped", e);
+			status.checked = false;
+			status.missing = [];
+		}
+		return status;
+	}
+
+	/**
+	 * "Label: custscript_sm_x (enter _sm_x)" — one line per missing parameter.
+	 * The "enter" form is what goes in the ID box, since NetSuite adds the
+	 * custscript prefix itself.
+	 */
+	function describeMissingParameters(missing) {
+		return missing.map(function (p) {
+			return (
+				"<b>" +
+				escapeHtml(p.label) +
+				"</b>: <code>" +
+				escapeHtml(p.id) +
+				"</code> (enter <code>" +
+				escapeHtml(p.id.replace(/^custscript/, "")) +
+				"</code> as the ID)"
+			);
+		});
+	}
+
+	var PARAMETERS_GUIDE_URL =
+		toolkitGithubUrl +
+		"/blob/main/docs/DEPLOYMENT_GUIDE.md#4-add-script-parameters";
+
+	/**
+	 * Banner for a failed parameter check, or "" when there is nothing to say.
+	 */
+	function buildParameterAlertHtml(paramStatus) {
+		if (!paramStatus.checked) {
+			return "";
+		}
+		if (!paramStatus.deploymentFound) {
+			return buildAlertHtml({
+				tone: "error",
+				title: "Map/Reduce deployment not found",
+				paragraphs: [
+					"No script deployment with the ID <code>" +
+						escapeHtml(MR_DEPLOYMENT_ID) +
+						"</code> exists, so deletions can't be started. Check the Map/Reduce " +
+						"script and deployment IDs against the deployment guide (&sect;11 Required IDs Reference).",
+				],
+			});
+		}
+		if (!paramStatus.missing.length) {
+			return "";
+		}
+		var count = paramStatus.missing.length;
+		return buildAlertHtml({
+			tone: "error",
+			title:
+				"Deletion is disabled &mdash; " +
+				count +
+				" Map/Reduce script parameter" +
+				(count === 1 ? " is" : "s are") +
+				" missing",
+			paragraphs: [
+				"The Map/Reduce script (<code>" +
+					escapeHtml(MR_SCRIPT_ID) +
+					"</code>) has no parameter with " +
+					(count === 1 ? "this ID" : "these IDs") +
+					":",
+			],
+			items: describeMissingParameters(paramStatus.missing),
+			footer: [
+				"Add " +
+					(count === 1 ? "it" : "them") +
+					" on the script record's <b>Parameters</b> subtab as <b>Free-Form Text</b>, " +
+					"then reload this page. If a parameter exists under a slightly different ID, " +
+					"correct the ID instead. This usually happens after an update that added a new parameter.",
+				'<a href="' +
+					escapeHtml(PARAMETERS_GUIDE_URL) +
+					'" target="_blank" rel="noopener noreferrer">Deployment guide: Add Script Parameters</a>',
+			],
+		});
 	}
 
 	/**
@@ -603,6 +826,12 @@ define([
 		// Resolved once per render and reused by the Delete Records banner and
 		// the Updates tab, so a page load makes at most one version check.
 		var updateStatus = getUpdateStatus();
+
+		// Confirm the Map/Reduce has every parameter it reads before the user
+		// fills in the form, so a missing one is named up front instead of
+		// surfacing as a failed (or silently unfiltered) deletion.
+		var paramStatus = checkMapReduceParameters();
+		var paramsMissing = paramStatus.checked && paramStatus.missing.length > 0;
 
 		var isOneWorld = isOneWorldAccount();
 
@@ -784,6 +1013,11 @@ define([
 			"  var SM_HAS_SUB = " +
 			(isOneWorld ? "true" : "false") +
 			";" +
+			// True when the Map/Reduce is missing script parameters. The banner
+			// explains why; the button stays disabled until they are added.
+			"  var SM_PARAMS_MISSING = " +
+			(paramsMissing ? "true" : "false") +
+			";" +
 			"  function updateConfirmation() {" +
 			"    var div = document.getElementById('custpage_confirmation_text');" +
 			"    if (!div) return;" +
@@ -897,7 +1131,7 @@ define([
 			"    try { mode = nlapiGetFieldValue('custpage_datefilter') || 'all'; } catch(e) {}" +
 			"    try { tt = nlapiGetFieldValue('custpage_trandateto') || ''; } catch(e) {}" +
 			"    try { ct = nlapiGetFieldValue('custpage_createddateto') || ''; } catch(e) {}" +
-			"    var ok = (!SM_HAS_SUB || !!sub) && !!rec && !!pm;" +
+			"    var ok = !SM_PARAMS_MISSING && (!SM_HAS_SUB || !!sub) && !!rec && !!pm;" +
 			"    if (ok && mode === 'trandate') ok = !!tt;" +
 			"    if (ok && mode === 'createddate') ok = !!ct;" +
 			"    var btns = [];" +
@@ -909,7 +1143,7 @@ define([
 			"      var lbl = (node.value || node.textContent || '').replace(/\\s+/g, ' ').trim();" +
 			"      if (lbl === 'Preview Deletion' && btns.indexOf(node) === -1) btns.push(node);" +
 			"    }" +
-			"    var tip = ok ? '' : 'Select a subsidiary, External ID option, and record type (and a To date when a date range is chosen) to continue.';" +
+			"    var tip = ok ? '' : SM_PARAMS_MISSING ? 'Deletion is disabled until the missing Map/Reduce script parameters are added. See the message at the top of the page.' : 'Select a subsidiary, External ID option, and record type (and a To date when a date range is chosen) to continue.';" +
 			"    function styleEl(el, off) {" +
 			"      if (!el) return;" +
 			"      var props = { 'background-color':'#8b929b','background-image':'none','color':'#f4f5f6','border-color':'#8b929b','border-top-color':'#8b929b','border-bottom-color':'#8b929b','border-left-color':'#8b929b','border-right-color':'#8b929b','box-shadow':'none','text-shadow':'none','outline':'none','opacity':'1' };" +
@@ -1031,23 +1265,28 @@ define([
 			"})();" +
 			"</script>";
 
-		// --- Update alert (Delete Records tab) ---
-		// Only rendered for the important level. Placed above the instructions
-		// so it is the first thing on the tab the page opens on.
+		// --- Alerts (Delete Records tab) ---
+		// One slot for every banner, placed above the instructions so it is the
+		// first thing on the tab the page opens on. Setup errors come first:
+		// they stop deletion, an update alert does not. The update alert is only
+		// rendered for the important level.
+		var alertsHtml = buildParameterAlertHtml(paramStatus);
 		if (updateStatus.level === UPDATE_LEVEL_IMPORTANT) {
+			alertsHtml += buildImportantAlertHtml(updateStatus);
+		}
+		if (alertsHtml) {
 			form.addFieldGroup({
-				id: "custpage_grp_update_alert",
+				id: "custpage_grp_alerts",
 				label: " ",
 				tab: "custpage_tab_delete",
 			});
-			var updateAlertField = form.addField({
-				id: "custpage_update_alert",
+			var alertsField = form.addField({
+				id: "custpage_alerts",
 				type: serverWidget.FieldType.INLINEHTML,
 				label: " ",
-				container: "custpage_grp_update_alert",
+				container: "custpage_grp_alerts",
 			});
-			updateAlertField.defaultValue =
-				buildImportantAlertHtml(updateStatus);
+			alertsField.defaultValue = alertsHtml;
 		}
 
 		// --- Instructions (Delete Records tab) ---
@@ -1501,6 +1740,41 @@ define([
 			return;
 		}
 
+		// Refuse to start a deletion the Map/Reduce can't run correctly. This
+		// matters most for the date parameters: if a "To" parameter is missing,
+		// the Map/Reduce reads null and would apply no date filter at all.
+		// Checked once on the first request; chain steps reuse that answer.
+		// A check that couldn't complete never blocks (see the helper).
+		if (!isChainRequest) {
+			var paramStatus = checkMapReduceParameters();
+			if (paramStatus.checked && paramStatus.missing.length) {
+				context.response.write(
+					'<h3 style="color: red;">Deletion not started: the Map/Reduce script is missing ' +
+						(paramStatus.missing.length === 1
+							? "a required parameter"
+							: paramStatus.missing.length +
+								" required parameters") +
+						".</h3>" +
+						"<ul>" +
+						describeMissingParameters(paramStatus.missing)
+							.map(function (line) {
+								return "<li>" + line + "</li>";
+							})
+							.join("") +
+						"</ul>" +
+						"<p>Add " +
+						(paramStatus.missing.length === 1 ? "it" : "them") +
+						" on the <b>Parameters</b> subtab of the Map/Reduce script record (<code>" +
+						escapeHtml(MR_SCRIPT_ID) +
+						'</code>), then reload the toolkit. <a href="' +
+						escapeHtml(PARAMETERS_GUIDE_URL) +
+						'" target="_blank" rel="noopener noreferrer">Deployment guide</a></p>' +
+						'<p><a href="javascript:history.back()">Go Back</a></p>',
+				);
+				return;
+			}
+		}
+
 		// Resolve group types into ordered list for first submission
 		var isGroupType = GROUP_TYPES.hasOwnProperty(recordType);
 		var typeList = [];
@@ -1551,8 +1825,8 @@ define([
 			var scriptTask = task.create({
 				taskType: task.TaskType.MAP_REDUCE,
 			});
-			scriptTask.scriptId = "customscript_sm_toolkit_delete_mr";
-			scriptTask.deploymentId = "customdeploy_sm_toolkit_delete_mr";
+			scriptTask.scriptId = MR_SCRIPT_ID;
+			scriptTask.deploymentId = MR_DEPLOYMENT_ID;
 
 			var params = {
 				custscript_sm_recordtype: currentType,
