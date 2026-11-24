@@ -79,6 +79,12 @@ processes that customer's sub-customers and their contacts, deepest level first,
 so the number of records touched can exceed the count you started from. Read the
 deployment guide before you confirm one.
 
+Two journal entries can be linked to each other, for example by a $0 customer
+payment that NetSuite saved only as a link, and then one can't be deleted while
+the other still exists. Journal entries that fail are retried once the rest of
+the run is done, so a linked pair that both match your criteria comes out in one
+run. Nothing is edited, and only records your criteria matched are retried.
+
 Individual deletions can still fail. Permissions, a closed period, a workflow or
 another script can each block a record, as can NetSuite's own validation, which
 is why every run reports failed totals next to the deleted ones.
