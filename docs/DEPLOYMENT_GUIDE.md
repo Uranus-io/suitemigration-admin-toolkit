@@ -284,7 +284,9 @@ The code refers to these IDs directly. They **must match exactly** or the tool w
 | Symptom | Likely cause |
 |---------|--------------|
 | *"Script not found"*, or the task never submits | The Map/Reduce **Script ID** or **Deployment ID** doesn't match §11 |
-| *"Missing required parameters: record type or subsidiary"* | A script **parameter ID** doesn't match §11, or the parameters were never saved on the script record. On a OneWorld account it also appears if no subsidiary reached the Map/Reduce |
+| Red banner *"Deletion is disabled — N Map/Reduce script parameters are missing"*, and **Preview Deletion** stays greyed out | The listed parameters don't exist on the Map/Reduce script record, or exist under a different ID. Add each one on the **Parameters** subtab (§4) using the ID shown in the banner, or correct the ID, then reload the page. Common after an update that added a parameter |
+| Red banner *"Map/Reduce deployment not found"* | The Map/Reduce **Deployment ID** doesn't match §11 |
+| *"Missing value for script parameter: custscript_sm_…"* in the Map/Reduce execution log | The named parameter reached the Map/Reduce empty. Usually its ID doesn't match §11. If the Suitelet showed no banner, check the parameter on the script record anyway: the Suitelet skips its check when the user's role can't view script deployments |
 | *"A delete task is already running"* | An earlier Map/Reduce deployment is still going. Wait for it |
 | Progress finishes but no **Deleted / Failed** counts appear | The counts travel via `N/cache`, and the page fell back to a plain "Completed" message. The numbers are still in the Map/Reduce execution log, under the `Summary` audit entry |
 | Deletion returns 0 records | Check your filter combination. **Blank** External ID with Cash Expenses, Transfers or SM Trial Balance JEs matches nothing by design (see §10) |
@@ -294,7 +296,7 @@ The code refers to these IDs directly. They **must match exactly** or the tool w
 
 Both scripts stick to standard NetSuite modules. Nothing external.
 
-- **Suitelet:** `N/ui/serverWidget`, `N/task`, `N/log`, `N/search`, `N/url`, `N/runtime`, `N/format`, `N/cache`
+- **Suitelet:** `N/ui/serverWidget`, `N/task`, `N/log`, `N/search`, `N/url`, `N/runtime`, `N/format`, `N/cache`, `N/https`, `N/record`
 - **Map/Reduce:** `N/search`, `N/record`, `N/runtime`, `N/log`, `N/cache`
 
 ---
