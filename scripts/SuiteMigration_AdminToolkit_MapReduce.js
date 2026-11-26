@@ -54,6 +54,31 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 	// version and a mismatched pair is visible in the execution log. Bump the
 	// two together. See docs/RELEASE_PROCESS.md.
 	var SCRIPT_VERSION = "1.0.0";
+
+	var SCRIPT_ID = "customscript_sm_toolkit_delete_mr";
+
+	// Parameters this script reads, by ID and the label used in
+	// DEPLOYMENT_GUIDE.md §4, so errors can name exactly which one is wrong.
+	// Keep in step with MR_PARAMETERS in the Suitelet, which checks that each
+	// one exists before a deletion is submitted.
+	var PARAMS = {
+		recordType: { id: "custscript_sm_recordtype", label: "Record Type" },
+		subsidiary: { id: "custscript_sm_subsidiary", label: "Subsidiary" },
+		externalId: { id: "custscript_sm_externalid", label: "External ID" },
+		tranDateFrom: {
+			id: "custscript_sm_trandate_from",
+			label: "Transaction Date From",
+		},
+		tranDateTo: { id: "custscript_sm_trandate_to", label: "Transaction Date To" },
+		createdDateFrom: {
+			id: "custscript_sm_createddate_from",
+			label: "Created Date From",
+		},
+		createdDateTo: {
+			id: "custscript_sm_createddate_to",
+			label: "Created Date To",
+		},
+	};
 	/**
 	 * Transaction record types — these support "trandate" filtering.
 	 * Entity types (customer, vendor) and items do NOT have trandate.
@@ -80,26 +105,22 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 
 	function getInputData() {
 		var scriptObj = runtime.getCurrentScript();
-		var recordType = scriptObj.getParameter({
-			name: "custscript_sm_recordtype",
-		});
+		var recordType = scriptObj.getParameter({ name: PARAMS.recordType.id });
 		var subsidiaryId = scriptObj.getParameter({
-			name: "custscript_sm_subsidiary",
+			name: PARAMS.subsidiary.id,
 		});
 		var externalIdMode = scriptObj.getParameter({
-			name: "custscript_sm_externalid",
+			name: PARAMS.externalId.id,
 		});
 		var tranDateFrom = scriptObj.getParameter({
-			name: "custscript_sm_trandate_from",
+			name: PARAMS.tranDateFrom.id,
 		});
-		var tranDateTo = scriptObj.getParameter({
-			name: "custscript_sm_trandate_to",
-		});
+		var tranDateTo = scriptObj.getParameter({ name: PARAMS.tranDateTo.id });
 		var createdDateFrom = scriptObj.getParameter({
-			name: "custscript_sm_createddate_from",
+			name: PARAMS.createdDateFrom.id,
 		});
 		var createdDateTo = scriptObj.getParameter({
-			name: "custscript_sm_createddate_to",
+			name: PARAMS.createdDateTo.id,
 		});
 
 		// Subsidiary only exists on OneWorld accounts. Checking the feature here
@@ -114,9 +135,35 @@ define(["N/search", "N/record", "N/runtime", "N/log", "N/cache"], function (
 			log.error("OneWorld feature check failed - assuming OneWorld", e);
 		}
 
-		if (!recordType || (isOneWorld && !subsidiaryId)) {
+		// Name every required parameter that arrived empty. getParameter()
+		// returns null both when a parameter has no value and when it isn't
+		// defined on this script record at all (a wrong or missing ID), so the
+		// message covers both. The Suitelet always sends these three, so an
+		// empty one almost always means the parameter itself is missing.
+		var required = [PARAMS.recordType, PARAMS.externalId];
+		if (isOneWorld) {
+			required.push(PARAMS.subsidiary);
+		}
+		var missing = required.filter(function (param) {
+			return !scriptObj.getParameter({ name: param.id });
+		});
+		if (missing.length) {
 			throw new Error(
-				"Missing required parameters: record type or subsidiary",
+				"Missing value for script parameter" +
+					(missing.length === 1 ? "" : "s") +
+					": " +
+					missing
+						.map(function (param) {
+							return param.id + " (" + param.label + ")";
+						})
+						.join(", ") +
+					". Check that " +
+					(missing.length === 1 ? "it exists" : "they exist") +
+					" on the Map/Reduce script record (" +
+					SCRIPT_ID +
+					") with exactly " +
+					(missing.length === 1 ? "this ID" : "these IDs") +
+					". See DEPLOYMENT_GUIDE.md section 4.",
 			);
 		}
 
